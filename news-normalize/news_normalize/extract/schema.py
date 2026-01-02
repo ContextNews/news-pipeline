@@ -31,6 +31,10 @@ class NormalizedArticle:
 
     Added by normalization:
         content_clean, entities, locations, ner_model, normalized_at
+
+    Embedding fields (optional, None if embeddings disabled):
+        embedding_headline, embedding_content, embedding_combined,
+        embedding_model, embedding_dim, embedding_chunks
     """
 
     # Raw fields from input (preserved as-is)
@@ -51,6 +55,14 @@ class NormalizedArticle:
     locations: list[Location] = field(default_factory=list)
     normalized_at: datetime = field(default_factory=_utcnow)
 
+    # Embedding fields (optional - None if embeddings disabled)
+    embedding_headline: Optional[list[float]] = None
+    embedding_content: Optional[list[float]] = None
+    embedding_combined: Optional[list[float]] = None
+    embedding_model: Optional[str] = None
+    embedding_dim: Optional[int] = None
+    embedding_chunks: Optional[int] = None
+
     def to_dict(self) -> dict:
         return {
             # Raw fields (preserved)
@@ -69,4 +81,11 @@ class NormalizedArticle:
             "locations": [{"name": loc.name, "confidence": loc.confidence} for loc in self.locations],
             "ner_model": self.ner_model,
             "normalized_at": self.normalized_at,
+            # Embedding fields
+            "embedding_headline": self.embedding_headline,
+            "embedding_content": self.embedding_content,
+            "embedding_combined": self.embedding_combined,
+            "embedding_model": self.embedding_model,
+            "embedding_dim": self.embedding_dim,
+            "embedding_chunks": self.embedding_chunks,
         }

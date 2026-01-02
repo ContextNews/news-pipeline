@@ -4,3 +4,8 @@ output_dir: tests/output
 spacy_model: sm
 output_format: json
 # period defaults to today (UTC)
+
+# Embeddings configuration (lightweight model for tests)
+embeddings:
+  enabled: true
+  model: minilm           # all-MiniLM-L6-v2 (384 dim, fast)

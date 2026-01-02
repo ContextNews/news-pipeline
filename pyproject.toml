@@ -32,6 +32,8 @@ readability-lxml = ">=0.8,<1.0"
 spacy = ">=3.7"
 spacy-transformers = ">=1.3"
 pyarrow = ">=18.0"
+sentence-transformers = ">=2.2"
+numpy = ">=1.26"
 
 # Development dependencies
 [tool.poetry.group.dev.dependencies]

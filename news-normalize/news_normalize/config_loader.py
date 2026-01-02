@@ -1,7 +1,7 @@
 """YAML configuration loader for normalization."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +18,36 @@ CONFIG_DIR = Path(__file__).parent.parent / "configs"
 
 
 @dataclass
+class EmbeddingConfig:
+    """Configuration for text embeddings."""
+
+    enabled: bool = False
+    model: str = "minilm"
+    batch_size: int = 32
+    weight_headline: float = 0.3
+    weight_content: float = 0.7
+
+    def __post_init__(self) -> None:
+        if self.enabled:
+            # Import here to avoid circular imports and loading torch unnecessarily
+            from news_normalize.extract.embeddings import EMBEDDING_MODELS
+
+            if self.model not in EMBEDDING_MODELS:
+                raise ValueError(
+                    f"Invalid embedding model: {self.model}. "
+                    f"Must be one of {list(EMBEDDING_MODELS.keys())}"
+                )
+
+            # Validate weights sum to 1.0
+            if abs(self.weight_headline + self.weight_content - 1.0) > 0.001:
+                raise ValueError(
+                    f"Embedding weights must sum to 1.0, got "
+                    f"{self.weight_headline} + {self.weight_content} = "
+                    f"{self.weight_headline + self.weight_content}"
+                )
+
+
+@dataclass
 class NormalizeConfig:
     storage: str  # "s3" or "local"
     spacy_model: str = "trf"
@@ -30,6 +60,9 @@ class NormalizeConfig:
     # Local mode fields
     input_dir: str = ""
     output_dir: str = ""  # Also used in S3 mode to override output to local
+
+    # Embeddings configuration
+    embeddings: EmbeddingConfig = field(default_factory=EmbeddingConfig)
 
     def __post_init__(self) -> None:
         # Validate storage mode
@@ -98,6 +131,26 @@ def build_output_key(config: NormalizeConfig, run_timestamp: str) -> str:
     return f"{config.output_prefix}normalized_{run_timestamp}.{config.output_format}"
 
 
+def _parse_embedding_config(data: dict) -> EmbeddingConfig:
+    """Parse embedding configuration from YAML data."""
+    emb_data = data.get("embeddings", {})
+
+    if isinstance(emb_data, bool):
+        # Simple boolean: embeddings: true/false
+        return EmbeddingConfig(enabled=emb_data)
+
+    if not isinstance(emb_data, dict):
+        return EmbeddingConfig()
+
+    return EmbeddingConfig(
+        enabled=emb_data.get("enabled", False),
+        model=emb_data.get("model", "minilm"),
+        batch_size=emb_data.get("batch_size", 32),
+        weight_headline=emb_data.get("weight_headline", 0.3),
+        weight_content=emb_data.get("weight_content", 0.7),
+    )
+
+
 def load_config(name: str) -> NormalizeConfig:
     """Load normalization config by name (e.g., 'test' or 'prod').
 
@@ -120,6 +173,7 @@ def load_config(name: str) -> NormalizeConfig:
         data = yaml.safe_load(f)
 
     storage = data.get("storage", "s3")
+    embeddings = _parse_embedding_config(data)
 
     if storage == "s3":
         # Load bucket from environment variable
@@ -131,6 +185,7 @@ def load_config(name: str) -> NormalizeConfig:
             output_format=data.get("output_format", "parquet"),
             period=data.get("period", ""),
             output_dir=data.get("output_dir", ""),  # Optional: write locally instead of S3
+            embeddings=embeddings,
         )
     else:
         # Local storage mode
@@ -140,4 +195,5 @@ def load_config(name: str) -> NormalizeConfig:
             output_dir=data.get("output_dir", ""),
             spacy_model=data.get("spacy_model", "sm"),
             output_format=data.get("output_format", "json"),
+            embeddings=embeddings,
         )

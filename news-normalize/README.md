@@ -1,6 +1,6 @@
 # news-normalize
 
-Batch normalization service that reads articles from news-ingest, extracts entities via spaCy NER, and writes enriched Parquet files to S3.
+Batch normalization service that reads articles from news-ingest, extracts entities via spaCy NER, generates text embeddings, and writes enriched Parquet files to S3.
 
 ## How It Works
 
@@ -9,7 +9,8 @@ Batch normalization service that reads articles from news-ingest, extracts entit
 3. Clean text (collapse whitespace)
 4. Extract entities via spaCy NER (PERSON, ORG, GPE, LOC)
 5. Rank locations by mention frequency + headline presence
-6. Write Parquet to S3
+6. Generate embeddings for headline, content, and combined
+7. Write Parquet to S3
 
 Safe to re-run—every input article produces exactly one output row.
 
@@ -19,8 +20,9 @@ Safe to re-run—every input article produces exactly one output row.
 # Install
 poetry install
 
-# Download spaCy model
+# Download models
 poetry run python -m spacy download en_core_web_trf
+poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
 
 # Local test (no S3 required)
 poetry run python normalize.py --config test
@@ -37,10 +39,10 @@ Runs manually via GitHub Actions workflow dispatch.
 
 ## Configuration
 
-| Config | Storage | SpaCy Model | Output | Use Case |
-|--------|---------|-------------|--------|----------|
-| `prod` | S3 | transformer | Parquet | GitHub Actions, production |
-| `test` | S3 → local | small       | JSON | Local development, CI |
+| Config | Storage | SpaCy Model | Embedding Model | Output |
+|--------|---------|-------------|-----------------|--------|
+| `prod` | S3 | transformer | mpnet (768-dim) | Parquet |
+| `test` | S3 → local | small | minilm (384-dim) | JSON |
 
 ## Output Contract
 
@@ -75,6 +77,12 @@ Each row in the Parquet file contains:
     {"name": "United Kingdom", "confidence": 0.62}
   ],
   "ner_model": "en_core_web_trf",
+  "embedding_headline": [0.023, -0.041, ...],
+  "embedding_content": [0.018, -0.033, ...],
+  "embedding_combined": [0.019, -0.035, ...],
+  "embedding_model": "sentence-transformers/all-mpnet-base-v2",
+  "embedding_dim": 768,
+  "embedding_chunks": 3,
   "normalized_at": "2024-01-15T14:00:00+00:00"
 }
 ```
@@ -104,6 +112,27 @@ confidence = (normalized_frequency × 0.7) + headline_bonus
 
 - **normalized_frequency**: `entity_count / max_count` across all locations
 - **headline_bonus**: +0.3 if location appears in headline
+
+## Embeddings
+
+### Models
+
+| Key | Model | Dimensions | Use Case |
+|-----|-------|------------|----------|
+| `mpnet` | all-mpnet-base-v2 | 768 | Production (higher quality) |
+| `minilm` | all-MiniLM-L6-v2 | 384 | Testing (faster) |
+
+### Vectors
+
+Three embeddings per article:
+
+- **headline**: Embedded directly
+- **content**: Long text chunked at sentence boundaries, mean-pooled
+- **combined**: Weighted combination (headline 0.3 + content 0.7), normalized
+
+### Chunking
+
+Articles exceeding the model's token limit are split into chunks at sentence boundaries. The `embedding_chunks` field records how many chunks were used.
 
 ## License
 

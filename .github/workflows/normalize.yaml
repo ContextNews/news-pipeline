@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  SPACY_MODEL: trf
   S3_BUCKET: ${{ secrets.S3_BUCKET }}
 
 jobs:
@@ -58,10 +57,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/spacy
-          key: spacy-${{ runner.os }}-${{ env.SPACY_MODEL }}
+          key: spacy-${{ runner.os }}-${{ hashFiles('news-normalize/configs/prod.yaml') }}
 
       - name: Download spaCy model
         run: poetry run python -m spacy download en_core_web_trf
+
+      - name: Cache embedding models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/torch/sentence_transformers
+          key: embeddings-${{ runner.os }}-${{ hashFiles('news-normalize/configs/prod.yaml') }}
+
+      - name: Download embedding model
+        run: poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
 
       - name: Run tests
         run: poetry run pytest news-normalize/tests/ -v

@@ -3,3 +3,11 @@ storage: s3
 spacy_model: trf
 output_format: parquet
 # period defaults to today (UTC)
+
+# Embeddings configuration
+embeddings:
+  enabled: true
+  model: mpnet            # all-mpnet-base-v2 (768 dim, higher quality)
+  batch_size: 32
+  weight_headline: 0.3
+  weight_content: 0.7

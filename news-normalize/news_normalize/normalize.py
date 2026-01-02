@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from news_normalize.config_loader import NormalizeConfig, build_output_key
+from news_normalize.config_loader import EmbeddingConfig, NormalizeConfig, build_output_key
 from news_normalize.extract.locations import rank_locations
 from news_normalize.extract.ner import DEFAULT_SPACY_MODEL, SPACY_MODELS, extract_entities_batch
 from news_normalize.extract.schema import Entity, NormalizedArticle
@@ -73,10 +73,21 @@ def prepare_article(raw: dict) -> PreparedArticle:
 
 
 def finalize_article(
-    prepared: PreparedArticle, entities: list[Entity], ner_model: str
+    prepared: PreparedArticle,
+    entities: list[Entity],
+    ner_model: str,
+    embeddings: Optional["ArticleEmbeddings"] = None,
 ) -> NormalizedArticle:
-    """Finalize article with pre-computed entities."""
+    """Finalize article with pre-computed entities and optional embeddings."""
     locations = rank_locations(entities, prepared.headline) if prepared.content_clean else []
+
+    # Extract embedding fields if provided
+    emb_headline = embeddings.headline if embeddings else None
+    emb_content = embeddings.content if embeddings else None
+    emb_combined = embeddings.combined if embeddings else None
+    emb_model = embeddings.model if embeddings else None
+    emb_dim = embeddings.dim if embeddings else None
+    emb_chunks = embeddings.chunks if embeddings else None
 
     return NormalizedArticle(
         # Raw fields (preserved)
@@ -95,6 +106,46 @@ def finalize_article(
         entities=entities,
         locations=locations,
         normalized_at=datetime.now(timezone.utc),
+        # Embedding fields
+        embedding_headline=emb_headline,
+        embedding_content=emb_content,
+        embedding_combined=emb_combined,
+        embedding_model=emb_model,
+        embedding_dim=emb_dim,
+        embedding_chunks=emb_chunks,
+    )
+
+
+def compute_embeddings_for_articles(
+    prepared: list[PreparedArticle],
+    config: EmbeddingConfig,
+) -> list:
+    """
+    Compute embeddings for all prepared articles.
+
+    Returns list of ArticleEmbeddings (or None if embeddings disabled).
+    """
+    if not config.enabled:
+        return [None] * len(prepared)
+
+    # Lazy import to avoid loading torch when embeddings are disabled
+    from news_normalize.extract.embeddings import (
+        ArticleEmbeddings,
+        compute_embeddings_batch,
+    )
+
+    logger.info(f"Computing embeddings for {len(prepared)} articles (model: {config.model})")
+
+    headlines = [p.headline for p in prepared]
+    contents = [p.content_clean for p in prepared]
+
+    return compute_embeddings_batch(
+        headlines=headlines,
+        contents=contents,
+        model_key=config.model,
+        weight_headline=config.weight_headline,
+        weight_content=config.weight_content,
+        batch_size=config.batch_size,
     )
 
 
@@ -274,13 +325,16 @@ def _run_local(config: NormalizeConfig) -> None:
     texts = [p.content_clean for p in prepared]
     all_entities = extract_entities_batch(texts, model_key=config.spacy_model)
 
-    # Second pass: finalize articles with entities
+    # Batch embeddings (if enabled)
+    all_embeddings = compute_embeddings_for_articles(prepared, config.embeddings)
+
+    # Second pass: finalize articles with entities and embeddings
     articles: list[NormalizedArticle] = []
     for i, prep in enumerate(prepared):
         if prep.error:
             articles.append(make_failed_article(raw_articles[i], prep.error, ner_model))
         else:
-            articles.append(finalize_article(prep, all_entities[i], ner_model))
+            articles.append(finalize_article(prep, all_entities[i], ner_model, all_embeddings[i]))
 
     # Write output with timestamped filename
     output_path = output_dir / f"normalized_{run_timestamp}.{config.output_format}"
@@ -346,13 +400,16 @@ def _run_s3(config: NormalizeConfig) -> None:
     texts = [p.content_clean for p in prepared]
     all_entities = extract_entities_batch(texts, model_key=config.spacy_model)
 
-    # Second pass: finalize articles with entities
+    # Batch embeddings (if enabled)
+    all_embeddings = compute_embeddings_for_articles(prepared, config.embeddings)
+
+    # Second pass: finalize articles with entities and embeddings
     articles: list[NormalizedArticle] = []
     for i, prep in enumerate(prepared):
         if prep.error:
             articles.append(make_failed_article(raw_articles[i], prep.error, ner_model))
         else:
-            articles.append(finalize_article(prep, all_entities[i], ner_model))
+            articles.append(finalize_article(prep, all_entities[i], ner_model, all_embeddings[i]))
 
     # Write output - local or S3
     if config.output_local:
