@@ -1,4 +1,4 @@
-name: News Ingestion
+name: Ingest
 
 on:
   schedule:

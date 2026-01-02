@@ -1,4 +1,4 @@
-name: Reset Pipeline Data
+name: Reset
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Normalize Pipeline
+name: Normalize
 
 on:
   workflow_dispatch:
