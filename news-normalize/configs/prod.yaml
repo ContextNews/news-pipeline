@@ -1,0 +1,5 @@
+storage: s3
+# bucket loaded from S3_BUCKET env var
+spacy_model: trf
+output_format: parquet
+# period defaults to today (UTC)

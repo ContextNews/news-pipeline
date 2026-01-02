@@ -1,0 +1,6 @@
+storage: s3
+# bucket loaded from S3_BUCKET env var
+output_dir: tests/output
+spacy_model: sm
+output_format: json
+# period defaults to today (UTC)

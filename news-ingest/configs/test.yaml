@@ -1,0 +1,36 @@
+# Test configuration - no S3 or Postgres required
+# Saves output to local CSV files
+
+lookback_hours: 24
+
+storage:
+  backend: local
+  local_path: tests/output
+
+state:
+  backend: memory
+
+output:
+  format: jsonl
+  compress: false
+
+resolve:
+  enabled: true
+  request_timeout: 30
+  max_retries: 3
+
+sources:
+  - bbc
+  - cnn
+  - sky
+  - fox
+  - guardian
+  - npr
+  - yahoo
+  - telegraph
+  # - ft # paywalled
+  # - politico # rate limited
+  # - nyt  # rate limited
+  # - wapo  # rate limited
+  # - ap  # only via google news which does not provide direct url
+  # - reuters  # only via google news which does not provide direct url
