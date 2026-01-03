@@ -20,7 +20,7 @@ A modular news processing pipeline that ingests articles from major news sources
 
 ## Architecture
 
-```
+```mermaid
 flowchart TD
     RSS[RSS Feeds]
 
