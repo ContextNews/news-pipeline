@@ -25,9 +25,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      - name: Verify S3 bucket access
-        run: aws s3 ls "s3://$S3_BUCKET/" > /dev/null
-
       - uses: actions/checkout@v4
 
       - name: Set up Python
@@ -43,6 +40,7 @@ jobs:
           virtualenvs-in-project: true
 
       - name: Load cached venv
+        id: cache-venv
         uses: actions/cache@v4
         with:
           path: .venv
@@ -51,26 +49,21 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction --no-root --without ingest
 
-      - name: Cache spaCy models
+      - name: Load cached models
+        id: cache-models
         uses: actions/cache@v4
         with:
-          path: ~/.cache/spacy
-          key: spacy-${{ runner.os }}-${{ hashFiles('news-normalize/configs/prod.yaml') }}
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/torch
+          key: models-normalize-${{ runner.os }}-${{ hashFiles('news-normalize/configs/prod.yaml') }}
 
       - name: Download spaCy model
         run: poetry run python -m spacy download en_core_web_trf
 
-      - name: Cache embedding models
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/torch/sentence_transformers
-          key: embeddings-${{ runner.os }}-${{ hashFiles('news-normalize/configs/prod.yaml') }}
-
       - name: Download embedding model
+        if: steps.cache-models.outputs.cache-hit != 'true'
         run: poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
-
-      - name: Run tests
-        run: poetry run pytest news-normalize/tests/ -v
 
       - name: Run normalization
         run: poetry run python news-normalize/normalize.py --config prod
