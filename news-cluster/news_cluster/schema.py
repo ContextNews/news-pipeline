@@ -30,7 +30,7 @@ class StoryArticles:
             "story_id": self.story_id,
             "title": self.title,
             "locations": [
-                {"name": loc.name, "confidence": loc.confidence}
+                {"name": loc.name, "confidence": loc.confidence, "country_code": loc.country_code}
                 for loc in self.locations
             ],
             "articles": [
@@ -53,6 +53,7 @@ class Location:
     """Aggregated location from a story's articles."""
     name: str
     confidence: float
+    country_code: Optional[str] = None
 
 
 @dataclass
@@ -97,7 +98,7 @@ class Story:
                 for e in self.top_entities
             ],
             "locations": [
-                {"name": loc.name, "confidence": loc.confidence}
+                {"name": loc.name, "confidence": loc.confidence, "country_code": loc.country_code}
                 for loc in self.locations
             ],
             "story_embedding": self.story_embedding,

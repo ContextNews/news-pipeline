@@ -76,7 +76,8 @@ def aggregate_entities(articles: list[dict[str, Any]], indices: list[int]) -> li
 
 def aggregate_locations(articles: list[dict[str, Any]], indices: list[int]) -> list[Location]:
     """Aggregate locations across articles in a cluster."""
-    location_scores: dict[str, list[float]] = {}
+    # Key: (name, country_code), Value: list of confidence scores
+    location_scores: dict[tuple[str, str | None], list[float]] = {}
 
     for idx in indices:
         article = articles[idx]
@@ -85,16 +86,18 @@ def aggregate_locations(articles: list[dict[str, Any]], indices: list[int]) -> l
             if isinstance(loc, dict):
                 name = loc.get("name", "")
                 confidence = loc.get("confidence", 0.5)
+                country_code = loc.get("country_code")
                 if name:
-                    if name not in location_scores:
-                        location_scores[name] = []
-                    location_scores[name].append(confidence)
+                    key = (name, country_code)
+                    if key not in location_scores:
+                        location_scores[key] = []
+                    location_scores[key].append(confidence)
 
     # Average confidence per location
     aggregated = []
-    for name, scores in location_scores.items():
+    for (name, country_code), scores in location_scores.items():
         avg_confidence = sum(scores) / len(scores)
-        aggregated.append(Location(name=name, confidence=avg_confidence))
+        aggregated.append(Location(name=name, confidence=avg_confidence, country_code=country_code))
 
     # Sort by confidence
     aggregated.sort(key=lambda x: x.confidence, reverse=True)

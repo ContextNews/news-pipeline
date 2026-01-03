@@ -16,8 +16,11 @@ class Entity:
 
 @dataclass
 class Location:
-    name: str
+    name: str                        # Canonical name (e.g., "United Kingdom")
     confidence: float
+    original: str = ""               # Original extracted text (e.g., "U.K.")
+    country_code: Optional[str] = None  # ISO 3166-1 alpha-2 (e.g., "GB")
+    type: str = "unknown"            # "country", "city", "region", "unknown"
 
 
 @dataclass
@@ -78,7 +81,16 @@ class NormalizedArticle:
             # Added by normalization
             "content_clean": self.content_clean,
             "entities": [{"text": e.text, "type": e.type, "count": e.count} for e in self.entities],
-            "locations": [{"name": loc.name, "confidence": loc.confidence} for loc in self.locations],
+            "locations": [
+                {
+                    "name": loc.name,
+                    "confidence": loc.confidence,
+                    "original": loc.original,
+                    "country_code": loc.country_code,
+                    "type": loc.type,
+                }
+                for loc in self.locations
+            ],
             "ner_model": self.ner_model,
             "normalized_at": self.normalized_at,
             # Embedding fields
