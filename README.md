@@ -67,6 +67,7 @@ Each service has `configs/prod.yaml` and `configs/test.yaml`:
 ## GitHub Actions
 
 - **ingest.yaml**: Runs every 6 hours, fetches new articles
+- **normalize.yaml**: Manual workflow to process articles for a given date
 - **reset.yaml**: Manual workflow to clear all pipeline state (destructive)
 
 ## Project Structure
