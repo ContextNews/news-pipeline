@@ -4,28 +4,48 @@ A modular news processing pipeline that ingests articles from major news sources
 
 ## Pipeline Stages
 
-| Stage | Status | Description |
-|-------|--------|-------------|
+| Stage | Status      | Description |
+|-------|-------------|-------------|
 | **news-ingest** | Implemented | Fetches articles from RSS feeds, resolves full content, stores as JSONL |
 | **news-normalize** | Implemented | Extracts named entities (NER), ranks locations, outputs Parquet |
-| **news-cluster** | Planned | Article clustering and topic grouping |
-| **news-contextualize** | Planned | Knowledge graph linking and enrichment |
-| **news-api** | Planned | REST API for querying processed articles |
+| **news-cluster** | Implemented | Article clustering and topic grouping |
+| **news-contextualize** | Planned     | Knowledge graph linking and enrichment |
+| **news-api** | Planned     | REST API for querying processed articles |
+
+## GitHub Actions
+
+- **ingest.yaml**: Runs every 6 hours, fetches new articles
+- **normalize.yaml**: Manual workflow to process articles for a given date
+- **reset.yaml**: Manual workflow to clear all pipeline state (destructive)
 
 ## Architecture
 
 ```
-RSS Feeds → [news-ingest] → S3 (JSONL.gz)
-                               ↓
-                         [news-normalize] → S3 (Parquet)
-                               ↓
-                         [future stages...]
+flowchart TD
+    RSS[RSS Feeds]
+
+    INGEST[news-ingest]
+    RAW[(S3<br/>Raw JSONL)]
+
+    NORMALIZE[news-normalize]
+    NORM[(S3<br/>Parquet Dataset)]
+
+    CLUSTER[news-cluster]
+    RDS[(Amazon RDS<br/>Stories)]
+
+    API[news-api]
+
+    RSS --> INGEST
+    INGEST -->|write JSONL| RAW
+
+    RAW -->|read JSONL| NORMALIZE
+    NORMALIZE -->|write Parquet| NORM
+
+    NORM -->|read Parquet| CLUSTER
+    CLUSTER -->|write stories| RDS
+
+    RDS --> API
 ```
-
-## Supported Sources
-
-BBC, CNN, Sky News, Fox News, The Guardian, NPR, Yahoo News, The Telegraph
-
 ## Requirements
 
 - Python 3.12+
@@ -63,30 +83,6 @@ Each service has `configs/prod.yaml` and `configs/test.yaml`:
 
 - **prod**: S3 storage, PostgreSQL state, transformer NER model
 - **test**: Local filesystem, in-memory state, lightweight NER model
-
-## GitHub Actions
-
-- **ingest.yaml**: Runs every 6 hours, fetches new articles
-- **normalize.yaml**: Manual workflow to process articles for a given date
-- **reset.yaml**: Manual workflow to clear all pipeline state (destructive)
-
-## Project Structure
-
-```
-news-pipeline/
-├── news-ingest/          # Stage 1: Article ingestion
-│   ├── news_ingest/      # Python package
-│   ├── configs/          # YAML configs
-│   └── tests/
-├── news-normalize/       # Stage 2: Entity extraction
-│   ├── news_normalize/   # Python package
-│   ├── configs/
-│   └── tests/
-├── news-cluster/         # Stage 3: (planned)
-├── news-contextualize/   # Stage 4: (planned)
-├── news-api/             # Stage 5: (planned)
-└── pyproject.toml        # Root dependencies
-```
 
 ## License
 

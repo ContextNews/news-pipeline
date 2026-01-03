@@ -1,0 +1,71 @@
+name: Cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      period:
+        description: 'Date to cluster (YYYY-MM-DD, defaults to today)'
+        required: false
+        type: string
+      window:
+        description: 'Number of days to include'
+        required: false
+        default: '1'
+        type: string
+
+env:
+  S3_BUCKET: ${{ secrets.S3_BUCKET }}
+
+jobs:
+  cluster:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate S3_BUCKET secret
+        run: |
+          if [ -z "$S3_BUCKET" ]; then
+            echo "::error::Missing required secret: S3_BUCKET"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-cluster-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root --without ingest --without normalize
+
+      - name: Run clustering
+        run: |
+          ARGS="--config prod"
+          if [ -n "${{ inputs.period }}" ]; then
+            ARGS="$ARGS --period ${{ inputs.period }}"
+          fi
+          if [ -n "${{ inputs.window }}" ]; then
+            ARGS="$ARGS --window ${{ inputs.window }}"
+          fi
+          poetry run python news-cluster/cluster.py $ARGS

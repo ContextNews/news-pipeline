@@ -1,0 +1,11 @@
+storage: s3
+
+# Clustering window (days)
+window: 1
+
+# HDBSCAN parameters
+hdbscan:
+  min_cluster_size: 3
+  min_samples: 2
+
+output_format: parquet
