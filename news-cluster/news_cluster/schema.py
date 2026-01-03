@@ -22,17 +22,14 @@ class StoryArticles:
     """A story with its constituent articles (denormalized view)."""
     story_id: str
     title: str
-    locations: list["Location"]
+    locations: list["HierarchicalLocation"]
     articles: list[ArticleSummary]
 
     def to_dict(self) -> dict:
         return {
             "story_id": self.story_id,
             "title": self.title,
-            "locations": [
-                {"name": loc.name, "confidence": loc.confidence, "country_code": loc.country_code}
-                for loc in self.locations
-            ],
+            "locations": [loc.to_dict() for loc in self.locations],
             "articles": [
                 {"article_id": a.article_id, "headline": a.headline, "source": a.source}
                 for a in self.articles
@@ -49,8 +46,44 @@ class Entity:
 
 
 @dataclass
+class SubLocation:
+    """A city or region within a country."""
+    name: str
+    type: str  # "region" or "city"
+    mention_count: int
+
+
+@dataclass
+class HierarchicalLocation:
+    """A country with optional sub-locations (regions and cities)."""
+    name: str
+    country_code: str
+    confidence: float
+    mention_count: int
+    regions: list[SubLocation] = field(default_factory=list)
+    cities: list[SubLocation] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "country_code": self.country_code,
+            "confidence": round(self.confidence, 2),
+            "mention_count": self.mention_count,
+            "regions": [
+                {"name": r.name, "type": r.type, "mention_count": r.mention_count}
+                for r in self.regions
+            ],
+            "cities": [
+                {"name": c.name, "type": c.type, "mention_count": c.mention_count}
+                for c in self.cities
+            ],
+        }
+
+
+# Keep old Location for backward compatibility during transition
+@dataclass
 class Location:
-    """Aggregated location from a story's articles."""
+    """Aggregated location from a story's articles (legacy flat structure)."""
     name: str
     confidence: float
     country_code: Optional[str] = None
@@ -81,7 +114,7 @@ class Story:
     article_count: int
     sources: list[str]
     top_entities: list[Entity]
-    locations: list[Location]
+    locations: list[HierarchicalLocation]
     story_embedding: list[float]
     start_published_at: datetime
     end_published_at: datetime
@@ -97,10 +130,7 @@ class Story:
                 {"text": e.text, "type": e.type, "count": e.count}
                 for e in self.top_entities
             ],
-            "locations": [
-                {"name": loc.name, "confidence": loc.confidence, "country_code": loc.country_code}
-                for loc in self.locations
-            ],
+            "locations": [loc.to_dict() for loc in self.locations],
             "story_embedding": self.story_embedding,
             "start_published_at": self.start_published_at,
             "end_published_at": self.end_published_at,

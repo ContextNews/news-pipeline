@@ -1,14 +1,52 @@
+"""Location extraction and ranking."""
+
 from news_normalize.config import MAX_LOCATIONS
+from news_normalize.extract.city_mapper import get_location_for_city
 from news_normalize.extract.country_normalizer import normalize_country
+from news_normalize.extract.region_mapper import get_country_for_region
 from news_normalize.extract.schema import Entity, Location
+
+
+def classify_location(name: str) -> tuple[str, str | None, str, str | None]:
+    """
+    Classify a location and determine its type and parent country.
+
+    Args:
+        name: The location name to classify
+
+    Returns:
+        Tuple of (canonical_name, country_code, type, parent_region)
+        - type is "country", "region", "city", or "unknown"
+        - parent_region is set for cities that belong to a known region
+    """
+    # Try country first
+    country_result = normalize_country(name)
+    if country_result:
+        return (country_result[0], country_result[1], "country", None)
+
+    cleaned = name.lower().strip()
+
+    # Try region/state
+    region_country = get_country_for_region(cleaned)
+    if region_country:
+        return (name.title(), region_country, "region", None)
+
+    # Try city
+    city_result = get_location_for_city(cleaned)
+    if city_result:
+        country_code, parent_region = city_result
+        return (name.title(), country_code, "city", parent_region)
+
+    # Unknown location
+    return (name, None, "unknown", None)
 
 
 def rank_locations(entities: list[Entity], headline: str) -> list[Location]:
     """
     Rank locations from entities by frequency and headline presence.
 
-    Normalizes country names (e.g., "UK", "Britain" → "United Kingdom")
-    and deduplicates variations before scoring.
+    Normalizes country names (e.g., "UK", "Britain" → "United Kingdom"),
+    classifies regions and cities, and deduplicates variations before scoring.
 
     Returns top N locations with confidence scores.
     """
@@ -21,24 +59,18 @@ def rank_locations(entities: list[Entity], headline: str) -> list[Location]:
     headline_lower = headline.lower()
 
     # Group entities by normalized name to deduplicate variations
-    # Key: (canonical_name, country_code or None)
+    # Key: (canonical_name, country_code, loc_type, parent_region)
     # Value: (list of original texts, combined count, any in headline)
-    grouped: dict[tuple[str, str | None, str], tuple[list[str], int, bool]] = {}
+    grouped: dict[
+        tuple[str, str | None, str, str | None],
+        tuple[list[str], int, bool]
+    ] = {}
 
     for entity in location_entities:
         original_text = entity.text
-        norm_result = normalize_country(original_text)
+        canonical_name, country_code, loc_type, parent_region = classify_location(original_text)
 
-        if norm_result:
-            canonical_name, country_code = norm_result
-            loc_type = "country"
-        else:
-            # Not a recognized country - keep original name
-            canonical_name = original_text
-            country_code = None
-            loc_type = "unknown"
-
-        key = (canonical_name, country_code, loc_type)
+        key = (canonical_name, country_code, loc_type, parent_region)
 
         if key not in grouped:
             grouped[key] = ([], 0, False)
@@ -55,7 +87,7 @@ def rank_locations(entities: list[Entity], headline: str) -> list[Location]:
     # Score each unique location
     max_count = max(data[1] for data in grouped.values())
 
-    scored: list[tuple[tuple[str, str | None, str], list[str], float]] = []
+    scored: list[tuple[tuple[str, str | None, str, str | None], list[str], float]] = []
     for key, (originals, total_count, in_headline) in grouped.items():
         # Base score from combined mention frequency (normalized)
         frequency_score = total_count / max_count if max_count > 0 else 0
@@ -71,7 +103,7 @@ def rank_locations(entities: list[Entity], headline: str) -> list[Location]:
 
     # Return top N as Location objects
     results: list[Location] = []
-    for (canonical_name, country_code, loc_type), originals, confidence in scored[:MAX_LOCATIONS]:
+    for (canonical_name, country_code, loc_type, parent_region), originals, confidence in scored[:MAX_LOCATIONS]:
         # Use the most common original text, or first if tie
         original = max(set(originals), key=originals.count)
 
@@ -81,6 +113,7 @@ def rank_locations(entities: list[Entity], headline: str) -> list[Location]:
             original=original,
             country_code=country_code,
             type=loc_type,
+            parent_region=parent_region,
         ))
 
     return results

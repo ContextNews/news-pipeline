@@ -21,6 +21,7 @@ class Location:
     original: str = ""               # Original extracted text (e.g., "U.K.")
     country_code: Optional[str] = None  # ISO 3166-1 alpha-2 (e.g., "GB")
     type: str = "unknown"            # "country", "city", "region", "unknown"
+    parent_region: Optional[str] = None  # For cities, the parent region/state name
 
 
 @dataclass
@@ -88,6 +89,7 @@ class NormalizedArticle:
                     "original": loc.original,
                     "country_code": loc.country_code,
                     "type": loc.type,
+                    "parent_region": loc.parent_region,
                 }
                 for loc in self.locations
             ],

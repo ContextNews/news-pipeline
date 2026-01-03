@@ -7,7 +7,16 @@ from typing import Any
 
 import numpy as np
 
-from news_cluster.schema import ArticleStoryMap, ArticleSummary, Entity, Location, Story, StoryArticles
+from news_cluster.schema import (
+    ArticleStoryMap,
+    ArticleSummary,
+    Entity,
+    HierarchicalLocation,
+    Location,
+    Story,
+    StoryArticles,
+    SubLocation,
+)
 
 
 def generate_story_id(cluster_label: int, article_ids: list[str]) -> str:
@@ -74,8 +83,157 @@ def aggregate_entities(articles: list[dict[str, Any]], indices: list[int]) -> li
     return top_entities
 
 
+def aggregate_locations_hierarchical(
+    articles: list[dict[str, Any]],
+    indices: list[int],
+    min_confidence: float = 0.75,
+    max_locations: int = 10,
+) -> list[HierarchicalLocation]:
+    """Aggregate locations into hierarchical country-based structure.
+
+    Cities and regions contribute to their parent country's confidence.
+    Only returns locations with confidence >= min_confidence.
+
+    Args:
+        articles: List of article dicts
+        indices: Indices of articles in this cluster
+        min_confidence: Minimum confidence threshold (default 0.75)
+        max_locations: Maximum number of countries to return
+
+    Returns:
+        List of HierarchicalLocation objects
+    """
+    # Track data per country
+    # country_code -> {country_name, country_mentions, regions, cities, articles_with_mentions, headline_mentions}
+    country_data: dict[str, dict[str, Any]] = {}
+    total_articles = len(indices)
+
+    for idx in indices:
+        article = articles[idx]
+        locations = article.get("locations", [])
+        headline = (article.get("headline") or "").lower()
+
+        # Track which countries this article mentions (for coverage calculation)
+        countries_in_article: set[str] = set()
+
+        for loc in locations:
+            if not isinstance(loc, dict):
+                continue
+
+            name = loc.get("name", "")
+            country_code = loc.get("country_code")
+            loc_type = loc.get("type", "unknown")
+            parent_region = loc.get("parent_region")
+
+            if not name or not country_code:
+                continue  # Skip locations without country association
+
+            # Initialize country bucket if needed
+            if country_code not in country_data:
+                country_data[country_code] = {
+                    "country_name": None,
+                    "country_mentions": 0,
+                    "regions": {},  # region_name -> mention_count
+                    "cities": {},   # city_name -> mention_count
+                    "articles_with_mentions": 0,
+                    "headline_mentions": 0,
+                }
+
+            data = country_data[country_code]
+            countries_in_article.add(country_code)
+
+            # Check if this location is mentioned in headline
+            in_headline = name.lower() in headline
+
+            if loc_type == "country":
+                data["country_name"] = name
+                data["country_mentions"] += 1
+                if in_headline:
+                    data["headline_mentions"] += 1
+            elif loc_type == "region":
+                if name not in data["regions"]:
+                    data["regions"][name] = 0
+                data["regions"][name] += 1
+                if in_headline:
+                    data["headline_mentions"] += 1
+            elif loc_type == "city":
+                if name not in data["cities"]:
+                    data["cities"][name] = 0
+                data["cities"][name] += 1
+                if in_headline:
+                    data["headline_mentions"] += 1
+
+        # Update article coverage for each country mentioned in this article
+        for cc in countries_in_article:
+            country_data[cc]["articles_with_mentions"] += 1
+
+    # Calculate confidence and build HierarchicalLocation objects
+    results: list[HierarchicalLocation] = []
+
+    for country_code, data in country_data.items():
+        # Get country name (from direct mentions or look up)
+        country_name = data["country_name"]
+        if not country_name:
+            # Try to get name from pycountry
+            try:
+                import pycountry
+                country = pycountry.countries.get(alpha_2=country_code)
+                if country:
+                    country_name = getattr(country, "common_name", country.name)
+                else:
+                    country_name = country_code
+            except Exception:
+                country_name = country_code
+
+        # Calculate total mentions (country + regions + cities)
+        region_mentions = sum(data["regions"].values())
+        city_mentions = sum(data["cities"].values())
+        total_mentions = data["country_mentions"] + region_mentions + city_mentions
+
+        if total_mentions == 0:
+            continue
+
+        # Calculate confidence score
+        # - Mention score: normalized by assumed max of 20 mentions (60% weight)
+        # - Coverage score: proportion of articles mentioning this country (20% weight)
+        # - Headline score: proportion of articles with headline mention (20% weight)
+        mention_score = min(1.0, total_mentions / 20) * 0.6
+        coverage_score = (data["articles_with_mentions"] / total_articles) * 0.2 if total_articles > 0 else 0
+        headline_score = (data["headline_mentions"] / total_articles) * 0.2 if total_articles > 0 else 0
+
+        confidence = mention_score + coverage_score + headline_score
+
+        # Apply minimum confidence filter
+        if confidence < min_confidence:
+            continue
+
+        # Build sub-location lists
+        regions = [
+            SubLocation(name=name, type="region", mention_count=count)
+            for name, count in sorted(data["regions"].items(), key=lambda x: -x[1])[:5]
+        ]
+        cities = [
+            SubLocation(name=name, type="city", mention_count=count)
+            for name, count in sorted(data["cities"].items(), key=lambda x: -x[1])[:5]
+        ]
+
+        results.append(HierarchicalLocation(
+            name=country_name,
+            country_code=country_code,
+            confidence=confidence,
+            mention_count=total_mentions,
+            regions=regions,
+            cities=cities,
+        ))
+
+    # Sort by confidence and return top N
+    results.sort(key=lambda x: x.confidence, reverse=True)
+    return results[:max_locations]
+
+
+# Keep old function for backward compatibility
 def aggregate_locations(articles: list[dict[str, Any]], indices: list[int]) -> list[Location]:
-    """Aggregate locations across articles in a cluster."""
+    """Aggregate locations across articles in a cluster (legacy flat version)."""
     # Key: (name, country_code), Value: list of confidence scores
     location_scores: dict[tuple[str, str | None], list[float]] = {}
 
@@ -187,7 +345,7 @@ def build_stories(
 
             # Aggregate metadata
             top_entities = aggregate_entities(articles, indices)
-            locations = aggregate_locations(articles, indices)
+            locations = aggregate_locations_hierarchical(articles, indices)
             sources = get_sources(articles, indices)
             start_pub, end_pub = get_time_range(articles, indices)
 
