@@ -1,0 +1,12 @@
+storage: local
+
+local:
+  normalized_path: "tests/data/normalized"
+  clustered_path: "tests/data/clustered"
+
+cache:
+  enabled: false
+
+server:
+  host: "127.0.0.1"
+  port: 8000

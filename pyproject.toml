@@ -45,11 +45,18 @@ hdbscan = ">=0.8.33"
 numpy = ">=1.26"
 pyarrow = ">=18.0"
 
+# API service dependencies
+[tool.poetry.group.api.dependencies]
+fastapi = ">=0.115"
+uvicorn = {version = ">=0.34", extras = ["standard"]}
+pydantic = ">=2.10"
+pyarrow = ">=18.0"
+
 # Development dependencies
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0"
 pandas = ">=2.0"
 
 [tool.pytest.ini_options]
-testpaths = ["news-ingest/tests", "news-normalize/tests", "news-cluster/tests"]
-pythonpath = ["news-ingest", "news-normalize", "news-cluster"]
+testpaths = ["news-ingest/tests", "news-normalize/tests", "news-cluster/tests", "news-api/tests"]
+pythonpath = ["news-ingest", "news-normalize", "news-cluster", "news-api"]
