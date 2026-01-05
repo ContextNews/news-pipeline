@@ -23,23 +23,22 @@ def get_s3_client():
     )
 
 
-def build_s3_key(source: str, timestamp: datetime, extension: str) -> str:
-    """Build the S3 key path for a given source and timestamp."""
+def build_s3_key(timestamp: datetime, extension: str) -> str:
+    """Build the S3 key path for a given timestamp."""
     return (
         f"news-raw/"
         f"year={timestamp.year:04d}/"
         f"month={timestamp.month:02d}/"
         f"day={timestamp.day:02d}/"
-        f"source={source}/"
-        f"articles_{timestamp.strftime('%Y%m%d_%H%M%S')}.{extension}"
+        f"raw_articles_{timestamp.strftime('%Y_%m_%d_%H_%M')}.{extension}"
     )
 
 
-def build_local_path(base_path: str, source: str, timestamp: datetime, extension: str) -> Path:
-    """Build local file path for a given source and timestamp."""
+def build_local_path(base_path: str, timestamp: datetime, extension: str) -> Path:
+    """Build local file path for a given timestamp."""
     path = Path(base_path)
     path.mkdir(parents=True, exist_ok=True)
-    filename = f"{source}_{timestamp.strftime('%Y%m%d_%H%M%S')}.{extension}"
+    filename = f"raw_articles_{timestamp.strftime('%Y_%m_%d_%H_%M')}.{extension}"
     return path / filename
 
 
@@ -72,12 +71,11 @@ def _serialize_csv(articles: list[dict]) -> tuple[bytes, str]:
     return buffer.getvalue().encode("utf-8"), "csv"
 
 
-def upload_articles(articles: list[dict], source: str, timestamp: datetime) -> str:
+def upload_articles(articles: list[dict], timestamp: datetime) -> str:
     """Upload articles using the configured storage backend.
 
     Args:
         articles: List of article dictionaries to upload
-        source: Source identifier (e.g., "bbc", "reuters")
         timestamp: Timestamp for partitioning
 
     Returns:
@@ -100,15 +98,15 @@ def upload_articles(articles: list[dict], source: str, timestamp: datetime) -> s
 
     # Upload based on storage backend
     if config.storage.backend == "local":
-        return _upload_local(content, source, timestamp, extension, config.storage.local_path)
+        return _upload_local(content, timestamp, extension, config.storage.local_path)
     else:
-        return _upload_s3(content, source, timestamp, extension)
+        return _upload_s3(content, timestamp, extension)
 
 
-def _upload_s3(content: bytes, source: str, timestamp: datetime, extension: str) -> str:
+def _upload_s3(content: bytes, timestamp: datetime, extension: str) -> str:
     """Upload to S3."""
     bucket = os.environ["S3_BUCKET"]
-    key = build_s3_key(source, timestamp, extension)
+    key = build_s3_key(timestamp, extension)
 
     client = get_s3_client()
     client.upload_fileobj(BytesIO(content), bucket, key)
@@ -116,9 +114,9 @@ def _upload_s3(content: bytes, source: str, timestamp: datetime, extension: str)
     return key
 
 
-def _upload_local(content: bytes, source: str, timestamp: datetime, extension: str, base_path: str) -> str:
+def _upload_local(content: bytes, timestamp: datetime, extension: str, base_path: str) -> str:
     """Write to local filesystem."""
-    filepath = build_local_path(base_path, source, timestamp, extension)
+    filepath = build_local_path(base_path, timestamp, extension)
 
     with open(filepath, "wb") as f:
         f.write(content)

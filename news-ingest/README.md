@@ -4,12 +4,12 @@ Batch news ingestion service that fetches articles from RSS feeds, normalizes th
 
 ## How It Works
 
-1. Read `last_fetched_at` from Postgres
-2. Fetch articles from RSS feeds published after that timestamp
+1. Read `last_fetched_at` from Postgres for each source
+2. Fetch articles from all RSS feeds published after that timestamp
 3. Resolve full article content (trafilatura → readability fallback)
 4. Normalize to Article schema
-5. Write gzip-compressed JSONL to S3
-6. Update state only after successful upload
+5. Write all articles to a single gzip-compressed JSONL file on S3
+6. Update state for all sources after successful upload
 
 Safe to re-run—duplicates are acceptable, data loss is not.
 
@@ -41,7 +41,7 @@ Runs automatically via GitHub Actions every 6 hours.
 ### Storage Path
 
 ```
-s3://{bucket}/news-raw/year=YYYY/month=MM/day=DD/source=SOURCE/articles.jsonl.gz
+s3://{bucket}/news-raw/year=YYYY/month=MM/day=DD/raw_articles_YYYY_MM_DD_HH_MM.jsonl.gz
 ```
 
 ### Article Schema

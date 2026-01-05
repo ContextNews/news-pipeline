@@ -69,18 +69,18 @@ def normalize_article(raw: dict, source: str, fetched_at: datetime) -> dict:
     }
 
 
-def ingest_source(source_id: str, run_timestamp: datetime) -> int:
-    """Ingest articles from a single source.
+def fetch_source(source_id: str, run_timestamp: datetime) -> list[dict]:
+    """Fetch and normalize articles from a single source.
 
     Args:
         source_id: The source identifier
         run_timestamp: Timestamp for this ingestion run
 
     Returns:
-        Number of articles ingested
+        List of normalized article dictionaries
     """
     config = get_config()
-    logger.info(f"Starting ingestion for source: {source_id}")
+    logger.info(f"Starting fetch for source: {source_id}")
     start_time = time.monotonic()
 
     # Get last fetched timestamp or default lookback
@@ -105,24 +105,10 @@ def ingest_source(source_id: str, run_timestamp: datetime) -> int:
             fetch_errors += 1
             continue
 
-    logger.info(f"Fetched {len(articles)} articles from {source_id} ({fetch_errors} errors)")
-
-    if not articles:
-        logger.info(f"No new articles for {source_id}, skipping upload")
-        update_last_fetched_at(source_id, run_timestamp)
-        return 0
-
-    # Upload to storage
-    output_path = upload_articles(articles, source_id, run_timestamp)
-    logger.info(f"Uploaded to: {output_path}")
-
-    # Update state only after successful upload
-    update_last_fetched_at(source_id, run_timestamp)
-
     elapsed = time.monotonic() - start_time
-    logger.info(f"Completed {source_id}: {len(articles)} articles in {elapsed:.2f}s")
+    logger.info(f"Fetched {len(articles)} articles from {source_id} ({fetch_errors} errors) in {elapsed:.2f}s")
 
-    return len(articles)
+    return articles
 
 
 def main():
@@ -155,19 +141,38 @@ def main():
         logger.warning("No sources configured")
         return
 
-    total_articles = 0
+    all_articles = []
+    successful_sources = []
     failed_sources = []
 
+    # Fetch articles from all sources
     for source_id in source_ids:
         try:
-            count = ingest_source(source_id, run_timestamp)
-            total_articles += count
+            articles = fetch_source(source_id, run_timestamp)
+            all_articles.extend(articles)
+            successful_sources.append(source_id)
         except Exception as e:
-            logger.error(f"Failed to ingest {source_id}: {e}")
+            logger.error(f"Failed to fetch {source_id}: {e}")
             failed_sources.append(source_id)
             continue
 
-    logger.info(f"Ingestion complete: {total_articles} total articles")
+    logger.info(f"Fetched {len(all_articles)} total articles from {len(successful_sources)} sources")
+
+    # Upload all articles to a single file
+    if all_articles:
+        output_path = upload_articles(all_articles, run_timestamp)
+        logger.info(f"Uploaded to: {output_path}")
+
+        # Update state for all successful sources after upload
+        for source_id in successful_sources:
+            update_last_fetched_at(source_id, run_timestamp)
+    else:
+        logger.info("No articles fetched, skipping upload")
+        # Still update state for sources that returned no articles
+        for source_id in successful_sources:
+            update_last_fetched_at(source_id, run_timestamp)
+
+    logger.info(f"Ingestion complete: {len(all_articles)} total articles")
 
     if failed_sources:
         logger.error(f"Failed sources: {failed_sources}")

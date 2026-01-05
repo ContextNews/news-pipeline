@@ -76,7 +76,7 @@ def test_ingest_with_test_config(output_dir):
         pytest.skip("No articles fetched from BBC")
 
     # Upload (goes to local JSONL due to test config)
-    output_path = upload_articles(articles, "bbc", fetched_at)
+    output_path = upload_articles(articles, fetched_at)
 
     # Verify output
     assert Path(output_path).exists()
