@@ -75,8 +75,21 @@ def run_pipeline(config: ClusterConfig) -> dict:
     )
 
     # Build stories
+    logger.info(
+        "Building stories (location_min_confidence=%.2f, max_locations=%d, max_regions=%d, max_cities=%d)",
+        config.location_min_confidence,
+        config.location_max_locations,
+        config.location_max_regions,
+        config.location_max_cities,
+    )
     stories, article_maps, story_articles = build_stories(
-        articles_with_embeddings, cluster_labels, embeddings
+        articles_with_embeddings,
+        cluster_labels,
+        embeddings,
+        location_min_confidence=config.location_min_confidence,
+        location_max_locations=config.location_max_locations,
+        location_max_regions=config.location_max_regions,
+        location_max_cities=config.location_max_cities,
     )
     logger.info("Built %d stories", len(stories))
 

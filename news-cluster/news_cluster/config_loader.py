@@ -25,6 +25,12 @@ class ClusterConfig:
     min_cluster_size: int = 3
     min_samples: int = 2
 
+    # Location aggregation parameters
+    location_min_confidence: float = 0.65
+    location_max_locations: int = 10
+    location_max_regions: int = 5
+    location_max_cities: int = 5
+
     # S3 mode fields
     bucket: str = ""
 
@@ -111,6 +117,9 @@ def load_config(name: str) -> ClusterConfig:
     # Get HDBSCAN parameters
     hdbscan_params = data.get("hdbscan", {})
 
+    # Get location aggregation parameters
+    location_params = data.get("location", {})
+
     if storage == "s3":
         bucket = os.getenv("S3_BUCKET", "")
         return ClusterConfig(
@@ -120,6 +129,10 @@ def load_config(name: str) -> ClusterConfig:
             window=data.get("window", 1),
             min_cluster_size=hdbscan_params.get("min_cluster_size", 3),
             min_samples=hdbscan_params.get("min_samples", 2),
+            location_min_confidence=location_params.get("min_confidence", 0.65),
+            location_max_locations=location_params.get("max_locations", 10),
+            location_max_regions=location_params.get("max_regions", 5),
+            location_max_cities=location_params.get("max_cities", 5),
             output_format=data.get("output_format", "parquet"),
             output_dir=data.get("output_dir", ""),
         )
@@ -132,5 +145,9 @@ def load_config(name: str) -> ClusterConfig:
             window=data.get("window", 1),
             min_cluster_size=hdbscan_params.get("min_cluster_size", 3),
             min_samples=hdbscan_params.get("min_samples", 2),
+            location_min_confidence=location_params.get("min_confidence", 0.65),
+            location_max_locations=location_params.get("max_locations", 10),
+            location_max_regions=location_params.get("max_regions", 5),
+            location_max_cities=location_params.get("max_cities", 5),
             output_format=data.get("output_format", "json"),
         )

@@ -37,6 +37,26 @@ def main() -> int:
         type=int,
         help="Number of days to include (overrides config)",
     )
+    parser.add_argument(
+        "--location-min-confidence",
+        type=float,
+        help="Minimum confidence for location inclusion (default: 0.65)",
+    )
+    parser.add_argument(
+        "--location-max-locations",
+        type=int,
+        help="Maximum countries per story (default: 10)",
+    )
+    parser.add_argument(
+        "--location-max-regions",
+        type=int,
+        help="Maximum regions per country (default: 5)",
+    )
+    parser.add_argument(
+        "--location-max-cities",
+        type=int,
+        help="Maximum cities per country (default: 5)",
+    )
 
     args = parser.parse_args()
 
@@ -50,6 +70,16 @@ def main() -> int:
         # Override window if specified
         if args.window:
             config.window = args.window
+
+        # Override location parameters if specified
+        if args.location_min_confidence is not None:
+            config.location_min_confidence = args.location_min_confidence
+        if args.location_max_locations is not None:
+            config.location_max_locations = args.location_max_locations
+        if args.location_max_regions is not None:
+            config.location_max_regions = args.location_max_regions
+        if args.location_max_cities is not None:
+            config.location_max_cities = args.location_max_cities
 
         logger.info("Starting clustering pipeline")
         logger.info("Config: storage=%s, period=%s, window=%d",

@@ -12,6 +12,22 @@ on:
         required: false
         default: '1'
         type: string
+      location_min_confidence:
+        description: 'Minimum confidence for location inclusion (default: 0.65)'
+        required: false
+        type: string
+      location_max_locations:
+        description: 'Maximum countries per story (default: 10)'
+        required: false
+        type: string
+      location_max_regions:
+        description: 'Maximum regions per country (default: 5)'
+        required: false
+        type: string
+      location_max_cities:
+        description: 'Maximum cities per country (default: 5)'
+        required: false
+        type: string
 
 env:
   S3_BUCKET: ${{ secrets.S3_BUCKET }}
@@ -67,5 +83,17 @@ jobs:
           fi
           if [ -n "${{ inputs.window }}" ]; then
             ARGS="$ARGS --window ${{ inputs.window }}"
+          fi
+          if [ -n "${{ inputs.location_min_confidence }}" ]; then
+            ARGS="$ARGS --location-min-confidence ${{ inputs.location_min_confidence }}"
+          fi
+          if [ -n "${{ inputs.location_max_locations }}" ]; then
+            ARGS="$ARGS --location-max-locations ${{ inputs.location_max_locations }}"
+          fi
+          if [ -n "${{ inputs.location_max_regions }}" ]; then
+            ARGS="$ARGS --location-max-regions ${{ inputs.location_max_regions }}"
+          fi
+          if [ -n "${{ inputs.location_max_cities }}" ]; then
+            ARGS="$ARGS --location-max-cities ${{ inputs.location_max_cities }}"
           fi
           poetry run python news-cluster/cluster.py $ARGS

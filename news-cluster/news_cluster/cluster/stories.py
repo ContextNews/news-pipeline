@@ -71,7 +71,7 @@ def aggregate_entities(articles: list[dict[str, Any]], indices: list[int]) -> li
         entities = article.get("entities", [])
         for ent in entities:
             if isinstance(ent, dict):
-                key = (ent.get("text", ""), ent.get("label", ""))
+                key = (ent.get("text", ""), ent.get("type", ""))
                 entity_counts[key] += 1
 
     # Convert to Entity objects, sorted by count
@@ -86,8 +86,10 @@ def aggregate_entities(articles: list[dict[str, Any]], indices: list[int]) -> li
 def aggregate_locations_hierarchical(
     articles: list[dict[str, Any]],
     indices: list[int],
-    min_confidence: float = 0.75,
+    min_confidence: float = 0.65,
     max_locations: int = 10,
+    max_regions: int = 5,
+    max_cities: int = 5,
 ) -> list[HierarchicalLocation]:
     """Aggregate locations into hierarchical country-based structure.
 
@@ -97,8 +99,10 @@ def aggregate_locations_hierarchical(
     Args:
         articles: List of article dicts
         indices: Indices of articles in this cluster
-        min_confidence: Minimum confidence threshold (default 0.75)
+        min_confidence: Minimum confidence threshold (default 0.65)
         max_locations: Maximum number of countries to return
+        max_regions: Maximum number of regions per country
+        max_cities: Maximum number of cities per country
 
     Returns:
         List of HierarchicalLocation objects
@@ -210,11 +214,11 @@ def aggregate_locations_hierarchical(
         # Build sub-location lists
         regions = [
             SubLocation(name=name, type="region", mention_count=count)
-            for name, count in sorted(data["regions"].items(), key=lambda x: -x[1])[:5]
+            for name, count in sorted(data["regions"].items(), key=lambda x: -x[1])[:max_regions]
         ]
         cities = [
             SubLocation(name=name, type="city", mention_count=count)
-            for name, count in sorted(data["cities"].items(), key=lambda x: -x[1])[:5]
+            for name, count in sorted(data["cities"].items(), key=lambda x: -x[1])[:max_cities]
         ]
 
         results.append(HierarchicalLocation(
@@ -298,6 +302,10 @@ def build_stories(
     articles: list[dict[str, Any]],
     cluster_labels: np.ndarray,
     embeddings: np.ndarray,
+    location_min_confidence: float = 0.65,
+    location_max_locations: int = 10,
+    location_max_regions: int = 5,
+    location_max_cities: int = 5,
 ) -> tuple[list[Story], list[ArticleStoryMap], list[StoryArticles]]:
     """Build Story and ArticleStoryMap objects from clustering results.
 
@@ -305,6 +313,10 @@ def build_stories(
         articles: List of article dicts
         cluster_labels: Array of cluster assignments
         embeddings: L2-normalized embedding matrix
+        location_min_confidence: Minimum confidence for location inclusion
+        location_max_locations: Maximum countries per story
+        location_max_regions: Maximum regions per country
+        location_max_cities: Maximum cities per country
 
     Returns:
         Tuple of (stories, article_story_maps, story_articles)
@@ -345,7 +357,14 @@ def build_stories(
 
             # Aggregate metadata
             top_entities = aggregate_entities(articles, indices)
-            locations = aggregate_locations_hierarchical(articles, indices)
+            locations = aggregate_locations_hierarchical(
+                articles,
+                indices,
+                min_confidence=location_min_confidence,
+                max_locations=location_max_locations,
+                max_regions=location_max_regions,
+                max_cities=location_max_cities,
+            )
             sources = get_sources(articles, indices)
             start_pub, end_pub = get_time_range(articles, indices)
 
