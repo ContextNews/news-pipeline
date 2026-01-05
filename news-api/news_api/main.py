@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI
 
 from news_api.config import load_config, set_config
-from news_api.routers import articles, health, stories
+from news_api.routers import articles, health, raw_articles, stories
 
 # Load config on startup
 config_name = os.getenv("NEWS_API_CONFIG", "prod")
@@ -21,6 +21,7 @@ app = FastAPI(
 # Register routers
 app.include_router(health.router)
 app.include_router(articles.router)
+app.include_router(raw_articles.router)
 app.include_router(stories.router)
 
 

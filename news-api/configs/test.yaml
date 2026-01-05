@@ -3,6 +3,7 @@ storage: local
 local:
   normalized_path: "tests/data/normalized"
   clustered_path: "tests/data/clustered"
+  raw_path: "tests/data/raw"
 
 cache:
   enabled: false

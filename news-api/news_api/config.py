@@ -16,12 +16,14 @@ class S3Config:
     endpoint: str
     normalized_prefix: str = "news-normalized"
     clustered_prefix: str = "news-clustered"
+    raw_prefix: str = "news-raw"
 
 
 @dataclass
 class LocalConfig:
     normalized_path: str = "tests/data/normalized"
     clustered_path: str = "tests/data/clustered"
+    raw_path: str = "tests/data/raw"
 
 
 @dataclass
@@ -79,6 +81,7 @@ def load_config(config_name: str = "prod") -> APIConfig:
             endpoint=os.getenv("S3_ENDPOINT", "https://s3.amazonaws.com"),
             normalized_prefix=s3_raw.get("normalized_prefix", "news-normalized"),
             clustered_prefix=s3_raw.get("clustered_prefix", "news-clustered"),
+            raw_prefix=s3_raw.get("raw_prefix", "news-raw"),
         )
 
     # Build local config
@@ -88,6 +91,7 @@ def load_config(config_name: str = "prod") -> APIConfig:
         local_config = LocalConfig(
             normalized_path=local_raw.get("normalized_path", "tests/data/normalized"),
             clustered_path=local_raw.get("clustered_path", "tests/data/clustered"),
+            raw_path=local_raw.get("raw_path", "tests/data/raw"),
         )
 
     # Build cache config

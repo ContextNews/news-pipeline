@@ -3,6 +3,7 @@ storage: s3
 s3:
   normalized_prefix: "news-normalized"
   clustered_prefix: "news-clustered"
+  raw_prefix: "news-raw"
 
 cache:
   enabled: true
