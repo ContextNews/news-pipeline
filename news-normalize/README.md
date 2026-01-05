@@ -8,9 +8,11 @@ Batch normalization service that reads articles from news-ingest, extracts entit
 2. Stream and decompress articles line-by-line
 3. Clean text (collapse whitespace)
 4. Extract entities via spaCy NER (PERSON, ORG, GPE, LOC)
-5. Rank locations by mention frequency + headline presence
-6. Generate embeddings for headline, content, and combined
-7. Write Parquet to S3
+5. Resolve GPE entities to countries (via pycountry + Nominatim geocoding)
+6. Group locations by country with sub-entities (cities, regions)
+7. Score locations by frequency + headline presence
+8. Generate embeddings for headline, content, and combined
+9. Write Parquet to S3
 
 Safe to re-run—every input article produces exactly one output row.
 
@@ -25,14 +27,14 @@ poetry run python -m spacy download en_core_web_trf
 poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
 
 # Local test (no S3 required)
-poetry run python normalize.py --config test
+poetry run python -m news_normalize.cli --config test
 
 # Production
 cp .env.example .env  # add credentials
-poetry run python normalize.py --config prod
+poetry run python -m news_normalize.cli --config prod
 
 # Specific date
-poetry run python normalize.py --config prod --period 2024-12-30
+poetry run python -m news_normalize.cli --config prod --period 2024-12-30
 ```
 
 Runs manually via GitHub Actions workflow dispatch.
@@ -73,8 +75,27 @@ Each row in the Parquet file contains:
     {"text": "John Smith", "type": "PERSON", "count": 2}
   ],
   "locations": [
-    {"name": "London", "confidence": 0.85},
-    {"name": "United Kingdom", "confidence": 0.62}
+    {
+      "name": "United Kingdom",
+      "country_code": "GB",
+      "count": 5,
+      "in_headline": true,
+      "confidence": 0.85,
+      "sub_entities": [
+        {"name": "London", "count": 2, "in_headline": false},
+        {"name": "Scotland", "count": 1, "in_headline": false}
+      ]
+    },
+    {
+      "name": "United States",
+      "country_code": "US",
+      "count": 3,
+      "in_headline": false,
+      "confidence": 0.72,
+      "sub_entities": [
+        {"name": "New York", "count": 1, "in_headline": false}
+      ]
+    }
   ],
   "ner_model": "en_core_web_trf",
   "embedding_headline": [0.023, -0.041, ...],
@@ -102,16 +123,99 @@ Uses spaCy's transformer model (`en_core_web_trf`) to extract four entity types:
 
 Entities are deduplicated and counted by mention frequency.
 
-### Location Ranking
+### Location Identification & Structuring
 
-Locations (GPE + LOC only) are scored and the top 3 returned:
+Locations are extracted from GPE (geopolitical entities) only. Each GPE is resolved to its parent country, with cities and regions nested as sub-entities.
+
+#### Location Schema
+
+Each location is a country with optional sub-entities:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Canonical country name (e.g., "United Kingdom") |
+| `country_code` | string | ISO 3166-1 alpha-2 code (e.g., "GB", "US") |
+| `count` | int | Total mentions (country + all sub-entities) |
+| `in_headline` | bool | True if country or any sub-entity in headline |
+| `confidence` | float | Score from 0-1 based on frequency and headline presence |
+| `sub_entities` | array | Cities/regions within this country |
+
+Sub-entities have:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Entity name as extracted (e.g., "London", "California") |
+| `count` | int | Number of mentions |
+| `in_headline` | bool | True if entity appears in headline |
+
+#### GPE Resolution
+
+GPE entities are resolved to countries using a three-step process:
+
+1. **Country detection** — Check if entity is a country via pycountry + custom aliases
+2. **Subdivision lookup** — Check pycountry.subdivisions for regions/states/provinces
+3. **Geocoding fallback** — Use Nominatim (OpenStreetMap) for cities
+
+Results are cached in-memory for performance.
+
+#### Country Normalization
+
+Country names are normalized to canonical forms with ISO codes:
+
+| Variation Type | Examples | Normalized To |
+|---------------|----------|---------------|
+| Abbreviations | "UK", "U.K.", "US", "U.S.A." | "United Kingdom" (GB), "United States" (US) |
+| Informal names | "Britain", "America", "Holland" | "United Kingdom" (GB), "United States" (US), "Netherlands" (NL) |
+| Historical names | "Burma", "Soviet Union" | "Myanmar" (MM), "Russia" (RU) |
+| Constituent parts | "England", "Scotland", "Wales" | "United Kingdom" (GB) |
+
+#### Confidence Scoring
+
+All locations are returned, sorted by confidence:
 
 ```
 confidence = (normalized_frequency × 0.7) + headline_bonus
 ```
 
-- **normalized_frequency**: `entity_count / max_count` across all locations
-- **headline_bonus**: +0.3 if location appears in headline
+- **normalized_frequency**: `location.count / max_count` across all locations
+- **headline_bonus**: +0.3 if country or any sub-entity appears in headline
+
+#### Example Output
+
+For an article about US-Denmark tensions over Greenland with mentions of Copenhagen and Washington:
+
+```json
+"locations": [
+  {
+    "name": "Greenland",
+    "country_code": "GL",
+    "count": 5,
+    "in_headline": true,
+    "confidence": 0.85,
+    "sub_entities": []
+  },
+  {
+    "name": "United States",
+    "country_code": "US",
+    "count": 4,
+    "in_headline": true,
+    "confidence": 0.76,
+    "sub_entities": [
+      {"name": "Washington", "count": 1, "in_headline": false}
+    ]
+  },
+  {
+    "name": "Denmark",
+    "country_code": "DK",
+    "count": 3,
+    "in_headline": false,
+    "confidence": 0.42,
+    "sub_entities": [
+      {"name": "Copenhagen", "count": 1, "in_headline": false}
+    ]
+  }
+]
+```
 
 ## Embeddings
 

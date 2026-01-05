@@ -7,6 +7,8 @@ import pyarrow.parquet as pq
 import pytest
 
 from news_normalize.normalize import run
+from news_normalize.io.read_jsonl import read_jsonl
+from news_normalize.io.write_output import write_output
 
 TESTS_DIR = Path(__file__).parent
 DATA_DIR = TESTS_DIR / "data"
@@ -31,8 +33,14 @@ def test_normalize_local_pipeline(input_file):
     parquet_path = OUTPUT_DIR / f"{output_stem}.parquet"
     json_path = OUTPUT_DIR / f"{output_stem}.json"
 
-    # Run the pipeline
-    run(str(input_file), str(parquet_path))
+    # Read input
+    raw_articles = list(read_jsonl(str(input_file)))
+
+    # Run the pipeline (no config = defaults)
+    normalized = run(raw_articles)
+
+    # Write output
+    write_output(normalized, str(parquet_path))
 
     # Assert output file exists
     assert parquet_path.exists(), "Parquet output file should be created"
@@ -94,3 +102,20 @@ def test_normalize_local_pipeline(input_file):
     # Assert NER model is set
     for idx, row in df.iterrows():
         assert row["ner_model"].startswith("en_core_web_"), f"Row {idx} should have valid ner_model"
+
+    # Assert locations have correct structure (country-centric with sub_entities)
+    for idx, row in df.iterrows():
+        locations = row["locations"]
+        if locations:  # May be empty list
+            for loc in locations:
+                assert "name" in loc, f"Row {idx} location missing name"
+                assert "country_code" in loc, f"Row {idx} location missing country_code"
+                assert "count" in loc, f"Row {idx} location missing count"
+                assert "in_headline" in loc, f"Row {idx} location missing in_headline"
+                assert "confidence" in loc, f"Row {idx} location missing confidence"
+                assert "sub_entities" in loc, f"Row {idx} location missing sub_entities"
+                # Validate sub_entities structure
+                for sub in loc["sub_entities"]:
+                    assert "name" in sub, f"Row {idx} sub_entity missing name"
+                    assert "count" in sub, f"Row {idx} sub_entity missing count"
+                    assert "in_headline" in sub, f"Row {idx} sub_entity missing in_headline"

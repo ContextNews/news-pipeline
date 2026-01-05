@@ -15,13 +15,46 @@ class Entity:
 
 
 @dataclass
+class SubEntity:
+    """A city, region, or state within a country."""
+
+    name: str
+    count: int
+    in_headline: bool
+
+
+@dataclass
 class Location:
-    name: str                        # Canonical name (e.g., "United Kingdom")
-    confidence: float
-    original: str = ""               # Original extracted text (e.g., "U.K.")
-    country_code: Optional[str] = None  # ISO 3166-1 alpha-2 (e.g., "GB")
-    type: str = "unknown"            # "country", "city", "region", "unknown"
-    parent_region: Optional[str] = None  # For cities, the parent region/state name
+    """A country with its sub-entities (cities, regions, states)."""
+
+    name: str  # Canonical country name (e.g., "United Kingdom")
+    country_code: str  # ISO 3166-1 alpha-2 (e.g., "GB")
+    count: int  # Total mentions (country + all sub-entities)
+    in_headline: bool  # True if country OR any sub-entity in headline
+    confidence: float  # Score based on frequency + headline presence
+    sub_entities: list[SubEntity] = field(default_factory=list)
+
+
+@dataclass
+class PreparedArticle:
+    """Intermediate state holding raw fields + cleaned content before NER."""
+
+    # Raw fields from input (preserved as-is)
+    article_id: str
+    source: str
+    url: str
+    published_at: datetime
+    fetched_at: datetime
+    headline: str
+    body: str
+    content: Optional[str]
+    resolution: dict
+
+    # Prepared for NER
+    content_clean: Optional[str]
+
+    # Error tracking (for pipeline failures, not content issues)
+    error: Optional[str] = None
 
 
 @dataclass
@@ -85,11 +118,18 @@ class NormalizedArticle:
             "locations": [
                 {
                     "name": loc.name,
-                    "confidence": loc.confidence,
-                    "original": loc.original,
                     "country_code": loc.country_code,
-                    "type": loc.type,
-                    "parent_region": loc.parent_region,
+                    "count": loc.count,
+                    "in_headline": loc.in_headline,
+                    "confidence": loc.confidence,
+                    "sub_entities": [
+                        {
+                            "name": sub.name,
+                            "count": sub.count,
+                            "in_headline": sub.in_headline,
+                        }
+                        for sub in loc.sub_entities
+                    ],
                 }
                 for loc in self.locations
             ],

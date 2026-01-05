@@ -3,7 +3,7 @@ from typing import Optional
 
 import spacy
 
-from news_normalize.extract.schema import Entity
+from news_normalize.schema import Entity
 
 # Whitelisted spaCy models
 SPACY_MODELS = {

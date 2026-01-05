@@ -4,7 +4,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from news_normalize.extract.schema import NormalizedArticle
+from news_normalize.schema import NormalizedArticle
 from news_normalize.io.s3 import is_s3_path, write_s3_bytes
 
 
