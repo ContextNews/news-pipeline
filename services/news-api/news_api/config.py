@@ -61,7 +61,7 @@ def load_config(config_name: str = "prod") -> APIConfig:
         APIConfig instance
     """
     # Find config file
-    config_dir = Path(__file__).parent.parent / "configs"
+    config_dir = Path(__file__).resolve().parent.parent / "configs"
     config_path = config_dir / f"{config_name}.yaml"
 
     if not config_path.exists():

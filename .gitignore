@@ -21,6 +21,7 @@ dist/
 collected_readmes/
 output/
 service_tests/output/
+**/data/
 
 # IDE
 .idea/
