@@ -1,22 +1,28 @@
 # news-pipeline
 
-A modular news processing pipeline that ingests articles from major news sources, extracts entities, and prepares data for downstream analysis.
+A modular, batch-oriented news processing pipeline that ingests raw articles, enriches them with NLP and embeddings, clusters them into stories, and exposes the results via an API.
 
-## Pipeline Stages
+The pipeline is designed for correctness, re-runnability, and transparency over raw speed. Each stage is isolated, deterministic, and produces explicit, versioned outputs suitable for downstream analysis and serving.
 
-| Stage | Status      | Description |
-|-------|-------------|-------------|
-| **news-ingest** | Implemented | Fetches articles from RSS feeds, resolves full content, stores as JSONL |
-| **news-normalize** | Implemented | Extracts named entities (NER), ranks locations, outputs Parquet |
-| **news-cluster** | Implemented | Article clustering and topic grouping |
-| **news-contextualize** | Planned     | Knowledge graph linking and enrichment |
-| **news-api** | Planned     | REST API for querying processed articles |
+## How It Works
+
+Overview
+
+1. Ingest – fetch raw articles from RSS feeds and store them immutably
+2. Normalize – clean text, extract entities, resolve locations, generate embeddings
+3. Cluster – group related articles into stories using semantic similarity
+4. Contextualize – (planned) enrich stories with data, generate titles/summaries
+5. Serve – expose articles and stories via a read-only API
 
 ## GitHub Actions
 
-- **ingest.yaml**: Runs every 6 hours, fetches new articles
-- **normalize.yaml**: Manual workflow to process articles for a given date
-- **reset.yaml**: Manual workflow to clear all pipeline state (destructive)
+| Action    | YAML file        | Schedule                                |
+| --------- | ---------------- | --------------------------------------- |
+| Ingest    | `ingest.yaml`    | Scheduled – every 6 hours               |
+| Normalize | `normalize.yaml` | Manual (workflow dispatch)              |
+| Cluster   | `cluster.yaml`   | Manual (workflow dispatch)              |
+| Reset     | `reset.yaml`     | Manual (workflow dispatch, destructive) |
+
 
 ## Architecture
 
@@ -52,37 +58,6 @@ flowchart TD
 - Poetry
 - AWS S3 (or compatible)
 - PostgreSQL (for ingest state tracking)
-
-## Setup
-
-```bash
-# Install dependencies
-poetry install
-
-# Copy environment template
-cp .env.example .env
-# Edit .env with your credentials
-```
-
-## Usage
-
-```bash
-# Run ingestion (fetches new articles)
-poetry run python news-ingest/ingest.py --config prod
-
-# Run normalization (processes today's articles)
-poetry run python news-normalize/normalize.py --config prod
-
-# Process a specific date
-poetry run python news-normalize/normalize.py --config prod --period 2026-01-01
-```
-
-## Configuration
-
-Each service has `configs/prod.yaml` and `configs/test.yaml`:
-
-- **prod**: S3 storage, PostgreSQL state, transformer NER model
-- **test**: Local filesystem, in-memory state, lightweight NER model
 
 ## License
 
