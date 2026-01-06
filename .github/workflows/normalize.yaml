@@ -66,4 +66,4 @@ jobs:
         run: poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
 
       - name: Run normalization
-        run: poetry run python news-normalize/normalize.py --config prod
+        run: PYTHONPATH=news-normalize poetry run python -m news_normalize.cli --config prod
