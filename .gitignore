@@ -18,6 +18,7 @@ dist/
 
 # Project-specific
 **/.plans/
+collected_readmes/
 output/
 tests/output/
 
