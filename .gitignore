@@ -20,7 +20,7 @@ dist/
 **/.plans/
 collected_readmes/
 output/
-tests/output/
+service_tests/output/
 
 # IDE
 .idea/
