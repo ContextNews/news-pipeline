@@ -13,15 +13,23 @@ class Entity(BaseModel):
     count: int
 
 
-class Location(BaseModel):
-    """Location extracted from article."""
+class SubEntity(BaseModel):
+    """A city, region, or state within a country."""
 
     name: str
-    confidence: float
-    original: str | None = None
-    country_code: str | None = None
-    type: str = "unknown"
-    parent_region: str | None = None
+    count: int
+    in_headline: bool
+
+
+class Location(BaseModel):
+    """A country with its sub-entities (cities, regions, states)."""
+
+    name: str  # Canonical country name
+    country_code: str  # ISO 3166-1 alpha-2
+    count: int  # Total mentions (country + all sub-entities)
+    in_headline: bool  # True if country OR any sub-entity in headline
+    confidence: float  # Score based on frequency + headline presence
+    sub_entities: list[SubEntity] = Field(default_factory=list)
 
 
 class ArticleResponse(BaseModel):
