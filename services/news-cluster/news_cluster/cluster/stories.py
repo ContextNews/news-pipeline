@@ -11,11 +11,11 @@ from news_cluster.schema import (
     ArticleStoryMap,
     ArticleSummary,
     Entity,
-    HierarchicalLocation,
+    StoryLocation,
     Location,
     Story,
     StoryArticles,
-    SubLocation,
+    StorySubEntity,
 )
 
 
@@ -95,10 +95,10 @@ def aggregate_locations_hierarchical(
     max_locations: int = 10,
     max_regions: int = 5,
     max_cities: int = 5,
-) -> list[HierarchicalLocation]:
-    """Aggregate locations into hierarchical country-based structure.
+) -> list[StoryLocation]:
+    """Aggregate locations into country-based structure with sub-entities.
 
-    Cities and regions contribute to their parent country's confidence.
+    Cities/regions from articles fall under sub_entities in the story output.
     Only returns locations with confidence >= min_confidence.
 
     Args:
@@ -106,11 +106,11 @@ def aggregate_locations_hierarchical(
         indices: Indices of articles in this cluster
         min_confidence: Minimum confidence threshold (default 0.65)
         max_locations: Maximum number of countries to return
-        max_regions: Maximum number of regions per country
-        max_cities: Maximum number of cities per country
+        max_regions: Maximum number of regions per country (used as part of sub-entity cap)
+        max_cities: Maximum number of cities per country (used as part of sub-entity cap)
 
     Returns:
-        List of HierarchicalLocation objects
+        List of StoryLocation objects
     """
     country_data: dict[str, dict[str, Any]] = {}
     total_articles = len(indices)
@@ -120,19 +120,17 @@ def aggregate_locations_hierarchical(
             country_data[code] = {
                 "country_name": None,
                 "country_mentions": 0,
-                "sub_locations": {},  # name -> {count, in_headline, type}
+                "sub_locations": {},  # name -> {count, headline_mentions}
                 "articles_with_mentions": 0,
-                "headline_mentions": 0,
+                "headline_mentions": 0,  # times country or sub-entity is in headline
             }
         return country_data[code]
 
-    def _add_sub_location(bucket: dict[str, Any], name: str, count: int, in_headline: bool, loc_type: str) -> None:
-        entry = bucket.get(name, {"count": 0, "in_headline": False, "type": loc_type})
+    def _add_sub_location(bucket: dict[str, Any], name: str, count: int, in_headline: bool) -> None:
+        entry = bucket.get(name, {"count": 0, "headline_mentions": 0})
         entry["count"] += max(count, 0)
-        entry["in_headline"] = entry["in_headline"] or in_headline
-        # Preserve a more specific type if it becomes available later
-        if entry.get("type") == "unknown" and loc_type != "unknown":
-            entry["type"] = loc_type
+        if in_headline:
+            entry["headline_mentions"] += 1
         bucket[name] = entry
 
     def _safe_count(value: Any, default: int = 1) -> int:
@@ -179,13 +177,11 @@ def aggregate_locations_hierarchical(
                         continue
                     sub_count = max(_safe_count(sub.get("count", 1)), 0)
                     sub_in_headline = bool(sub.get("in_headline")) or (sub_name.lower() in headline)
-                    sub_type = sub.get("type", "unknown")
                     _add_sub_location(
                         data["sub_locations"],
                         sub_name,
                         sub_count or 1,
                         sub_in_headline,
-                        loc_type=sub_type if sub_type else "unknown",
                     )
                     if sub_count:
                         countries_in_article.add(country_code)
@@ -199,16 +195,8 @@ def aggregate_locations_hierarchical(
                     data["country_mentions"] += loc_count or 1
                     if in_headline:
                         data["headline_mentions"] += 1
-                elif loc_type == "region":
-                    _add_sub_location(data["sub_locations"], name, loc_count or 1, in_headline, loc_type="region")
-                    if in_headline:
-                        data["headline_mentions"] += 1
-                elif loc_type == "city":
-                    _add_sub_location(data["sub_locations"], name, loc_count or 1, in_headline, loc_type="city")
-                    if in_headline:
-                        data["headline_mentions"] += 1
                 else:
-                    _add_sub_location(data["sub_locations"], name, loc_count or 1, in_headline, loc_type="unknown")
+                    _add_sub_location(data["sub_locations"], name, loc_count or 1, in_headline)
                     if in_headline:
                         data["headline_mentions"] += 1
 
@@ -248,34 +236,26 @@ def aggregate_locations_hierarchical(
         if confidence < min_confidence:
             continue
 
-        region_items = [
-            (name, meta["count"])
-            for name, meta in sub_locations.items()
-            if meta.get("type") == "region"
-        ]
-        city_items = [
-            (name, meta["count"], meta.get("type", "city"))
-            for name, meta in sub_locations.items()
-            if meta.get("type") != "region"
+        max_sub_entities = max_regions + max_cities
+        sub_entities = [
+            StorySubEntity(
+                name=name,
+                mention_count=meta["count"],
+                in_headline_ratio=(meta.get("headline_mentions", 0) / total_articles) if total_articles else 0.0,
+            )
+            for name, meta in sorted(sub_locations.items(), key=lambda x: -x[1]["count"])[:max_sub_entities]
         ]
 
-        regions = [
-            SubLocation(name=name, type="region", mention_count=count)
-            for name, count in sorted(region_items, key=lambda x: -x[1])[:max_regions]
-        ]
-        cities = [
-            SubLocation(name=name, type=sub_type, mention_count=count)
-            for name, count, sub_type in sorted(city_items, key=lambda x: -x[1])[:max_cities]
-        ]
+        in_headline_ratio = (data["headline_mentions"] / total_articles) if total_articles else 0.0
 
         results.append(
-            HierarchicalLocation(
+            StoryLocation(
                 name=country_name,
                 country_code=country_code,
                 confidence=confidence,
                 mention_count=total_mentions,
-                regions=regions,
-                cities=cities,
+                in_headline_ratio=in_headline_ratio,
+                sub_entities=sub_entities,
             )
         )
 

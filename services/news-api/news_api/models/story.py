@@ -7,23 +7,23 @@ from pydantic import BaseModel, Field
 from news_api.models.article import Entity
 
 
-class SubLocation(BaseModel):
-    """Sub-location within a country (region or city)."""
+class StorySubEntity(BaseModel):
+    """Sub-entity (city/region/state) within a country."""
 
     name: str
-    type: str
     mention_count: int
+    in_headline_ratio: float
 
 
-class HierarchicalLocation(BaseModel):
-    """Hierarchical location with country and sub-locations."""
+class StoryLocation(BaseModel):
+    """Country-level location with aggregated sub-entities."""
 
     name: str
     country_code: str
     confidence: float
     mention_count: int
-    regions: list[SubLocation] = Field(default_factory=list)
-    cities: list[SubLocation] = Field(default_factory=list)
+    in_headline_ratio: float
+    sub_entities: list[StorySubEntity] = Field(default_factory=list)
 
 
 class StoryResponse(BaseModel):
@@ -34,7 +34,7 @@ class StoryResponse(BaseModel):
     article_count: int
     sources: list[str]
     top_entities: list[Entity]
-    locations: list[HierarchicalLocation]
+    locations: list[StoryLocation]
     start_published_at: datetime
     end_published_at: datetime
     created_at: datetime
@@ -69,5 +69,5 @@ class StoryArticlesResponse(BaseModel):
 
     story_id: str
     title: str
-    locations: list[HierarchicalLocation] = Field(default_factory=list)
+    locations: list[StoryLocation] = Field(default_factory=list)
     articles: list[ArticleSummary]

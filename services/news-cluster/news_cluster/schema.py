@@ -22,7 +22,7 @@ class StoryArticles:
     """A story with its constituent articles (denormalized view)."""
     story_id: str
     title: str
-    locations: list["HierarchicalLocation"]
+    locations: list["StoryLocation"]
     articles: list[ArticleSummary]
 
     def to_dict(self) -> dict:
@@ -46,22 +46,22 @@ class Entity:
 
 
 @dataclass
-class SubLocation:
-    """A city or region within a country."""
+class StorySubEntity:
+    """A sub-entity (city/region/state) within a country."""
     name: str
-    type: str  # "region" or "city"
     mention_count: int
+    in_headline_ratio: float
 
 
 @dataclass
-class HierarchicalLocation:
-    """A country with optional sub-locations (regions and cities)."""
+class StoryLocation:
+    """Aggregated country-level location with sub-entities."""
     name: str
     country_code: str
     confidence: float
     mention_count: int
-    regions: list[SubLocation] = field(default_factory=list)
-    cities: list[SubLocation] = field(default_factory=list)
+    in_headline_ratio: float
+    sub_entities: list[StorySubEntity] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -69,13 +69,14 @@ class HierarchicalLocation:
             "country_code": self.country_code,
             "confidence": round(self.confidence, 2),
             "mention_count": self.mention_count,
-            "regions": [
-                {"name": r.name, "type": r.type, "mention_count": r.mention_count}
-                for r in self.regions
-            ],
-            "cities": [
-                {"name": c.name, "type": c.type, "mention_count": c.mention_count}
-                for c in self.cities
+            "in_headline_ratio": round(self.in_headline_ratio, 2),
+            "sub_entities": [
+                {
+                    "name": sub.name,
+                    "mention_count": sub.mention_count,
+                    "in_headline_ratio": round(sub.in_headline_ratio, 2),
+                }
+                for sub in self.sub_entities
             ],
         }
 
@@ -114,7 +115,7 @@ class Story:
     article_count: int
     sources: list[str]
     top_entities: list[Entity]
-    locations: list[HierarchicalLocation]
+    locations: list[StoryLocation]
     story_embedding: list[float]
     start_published_at: datetime
     end_published_at: datetime

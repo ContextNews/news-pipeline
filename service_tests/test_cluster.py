@@ -69,7 +69,9 @@ def test_build_stories_with_new_location_schema():
     fr = story.locations[0]
     assert fr.country_code == "FR"
     assert fr.mention_count >= 4  # country + sub-entity counts
-    assert fr.cities and fr.cities[0].name == "Paris"
+    assert fr.sub_entities and fr.sub_entities[0].name == "Paris"
+    assert fr.sub_entities[0].mention_count >= 3  # aggregated sub-entity counts
+    assert 0 <= fr.in_headline_ratio <= 1
 
     # Article mappings created for each article
     assert {m.article_id for m in article_maps} == {"a1", "a2"}

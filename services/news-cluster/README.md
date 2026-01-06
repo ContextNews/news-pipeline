@@ -61,8 +61,8 @@ Key parameters (configurable in YAML or via CLI):
 **Location Aggregation:**
 - `location_min_confidence` - Minimum confidence to include a country (default: 0.65)
 - `location_max_locations` - Maximum countries per story (default: 10)
-- `location_max_regions` - Maximum regions per country (default: 5)
-- `location_max_cities` - Maximum cities per country (default: 5)
+- `location_max_regions` - Max regions per country (used to cap sub-entities)
+- `location_max_cities` - Max cities per country (used to cap sub-entities)
 
 **Other:**
 - `window` - Number of days to include in clustering
@@ -95,25 +95,24 @@ Each article arrives from `news-normalize` with pre-extracted locations:
 
 ```json
 {
-  "name": "London",
-  "confidence": 0.92,
-  "country_code": "GB",
-  "type": "city",
-  "parent_region": "England",
-  "original": "London"
+  "name": "France",
+  "country_code": "FR",
+  "count": 3,
+  "in_headline": true,
+  "sub_entities": [
+    {"name": "Paris", "count": 2, "in_headline": true}
+  ]
 }
 ```
-
-Location types: `country`, `region`, `city`, or `unknown`
 
 ### Aggregation Algorithm
 
 For each cluster of articles:
 
 1. **Group by Country**: All locations are bucketed by `country_code`
-2. **Track Mentions**: Count occurrences at each level (country, region, city)
+2. **Track Mentions**: Count occurrences at country level plus sub-entities
 3. **Track Coverage**: How many articles mention each country
-4. **Track Headlines**: Bonus for locations appearing in article headlines
+4. **Track Headlines**: Track headline mentions for country and sub-entities
 
 ### Confidence Scoring
 
@@ -129,12 +128,12 @@ confidence = mention_score + coverage_score + headline_score
 | `coverage_score` | 20% | `(articles_with_mentions / total_articles) × 0.2` |
 | `headline_score` | 20% | `(headline_mentions / total_articles) × 0.2` |
 
-- **Total mentions** = country mentions + region mentions + city mentions
+- **Total mentions** = country mentions + all sub-entity mentions
 - Only locations with `confidence >= min_confidence` are included (default: 0.65)
 
 ### Hierarchical Output Structure
 
-Locations are structured hierarchically by country:
+Locations are structured by country with sub-entities (cities/regions/states), each tracking headline ratios:
 
 ```json
 {
@@ -142,13 +141,11 @@ Locations are structured hierarchically by country:
   "country_code": "GB",
   "confidence": 0.89,
   "mention_count": 28,
-  "regions": [
-    {"name": "England", "type": "region", "mention_count": 12},
-    {"name": "Scotland", "type": "region", "mention_count": 4}
-  ],
-  "cities": [
-    {"name": "London", "type": "city", "mention_count": 15},
-    {"name": "Manchester", "type": "city", "mention_count": 6}
+  "in_headline_ratio": 0.5,
+  "sub_entities": [
+    {"name": "England", "mention_count": 12, "in_headline_ratio": 0.3},
+    {"name": "London", "mention_count": 15, "in_headline_ratio": 0.4},
+    {"name": "Manchester", "mention_count": 6, "in_headline_ratio": 0.0}
   ]
 }
 ```
