@@ -4,6 +4,14 @@ A modular, batch-oriented news processing pipeline that ingests raw articles, en
 
 The pipeline is designed for correctness, re-runnability, and transparency over raw speed. Each stage is isolated, deterministic, and produces explicit, versioned outputs suitable for downstream analysis and serving.
 
+## Repository Layout
+
+- `services/news-ingest` – RSS fetch + content resolution to JSONL
+- `services/news-normalize` – entity/locations, embeddings, Parquet output
+- `services/news-cluster` – clustering and story aggregation
+- `services/news-contextualize` – (planned) enrichment stage
+- `services/news-api` – read-only API over clustered data
+
 ## How It Works
 
 Overview

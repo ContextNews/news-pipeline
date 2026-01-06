@@ -34,5 +34,5 @@ def collect_readmes(project_root: Path):
 
 
 if __name__ == "__main__":
-    project_root = Path(__file__).resolve().parent
+    project_root = Path(__file__).resolve().parent.parent
     collect_readmes(project_root)

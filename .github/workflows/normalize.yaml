@@ -56,7 +56,7 @@ jobs:
           path: |
             ~/.cache/huggingface
             ~/.cache/torch
-          key: models-normalize-${{ runner.os }}-${{ hashFiles('news-normalize/configs/prod.yaml') }}
+          key: models-normalize-${{ runner.os }}-${{ hashFiles('services/news-normalize/configs/prod.yaml') }}
 
       - name: Download spaCy model
         run: poetry run python -m spacy download en_core_web_trf
@@ -66,4 +66,4 @@ jobs:
         run: poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
 
       - name: Run normalization
-        run: PYTHONPATH=news-normalize poetry run python -m news_normalize.cli --config prod
+        run: PYTHONPATH=services/news-normalize poetry run python -m news_normalize.cli --config prod

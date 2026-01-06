@@ -96,4 +96,4 @@ jobs:
           if [ -n "${{ inputs.location_max_cities }}" ]; then
             ARGS="$ARGS --location-max-cities ${{ inputs.location_max_cities }}"
           fi
-          poetry run python news-cluster/cluster.py $ARGS
+          poetry run python services/news-cluster/cluster.py $ARGS

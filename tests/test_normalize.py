@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Add news-normalize to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "news-normalize"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "news-normalize"))
 
 from news_normalize.normalize import run
 from news_normalize.utils.config_loader import load_config

@@ -59,5 +59,15 @@ pytest = ">=9.0"
 pandas = ">=2.0"
 
 [tool.pytest.ini_options]
-testpaths = ["news-ingest/tests", "news-normalize/tests", "news-cluster/tests", "news-api/tests"]
-pythonpath = ["news-ingest", "news-normalize", "news-cluster", "news-api"]
+testpaths = [
+    "services/news-ingest/tests",
+    "services/news-normalize/tests",
+    "services/news-cluster/tests",
+    "services/news-api/tests",
+]
+pythonpath = [
+    "services/news-ingest",
+    "services/news-normalize",
+    "services/news-cluster",
+    "services/news-api",
+]
