@@ -9,3 +9,7 @@ output_format: json
 embeddings:
   enabled: true
   model: minilm           # all-MiniLM-L6-v2 (384 dim, fast)
+
+# Database configuration (disabled for tests)
+database:
+  enabled: false

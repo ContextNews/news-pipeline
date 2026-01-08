@@ -40,6 +40,10 @@ class NormalizeConfig:
     embedding_weight_headline: float = 0.3
     embedding_weight_content: float = 0.7
 
+    # Database configuration
+    database_enabled: bool = False
+    database_batch_size: int = 100
+
     def __post_init__(self) -> None:
         # Validate storage mode
         if self.storage not in ("s3", "local"):
@@ -167,6 +171,18 @@ def load_config(name: str) -> NormalizeConfig:
         embedding_weight_headline = 0.3
         embedding_weight_content = 0.7
 
+    # Parse database config from nested structure
+    db_data = data.get("database", {})
+    if isinstance(db_data, bool):
+        database_enabled = db_data
+        database_batch_size = 100
+    elif isinstance(db_data, dict):
+        database_enabled = db_data.get("enabled", False)
+        database_batch_size = db_data.get("batch_size", 100)
+    else:
+        database_enabled = False
+        database_batch_size = 100
+
     if storage == "s3":
         bucket = os.getenv("S3_BUCKET", "")
         return NormalizeConfig(
@@ -181,6 +197,8 @@ def load_config(name: str) -> NormalizeConfig:
             embedding_batch_size=embedding_batch_size,
             embedding_weight_headline=embedding_weight_headline,
             embedding_weight_content=embedding_weight_content,
+            database_enabled=database_enabled,
+            database_batch_size=database_batch_size,
         )
     else:
         return NormalizeConfig(
@@ -194,4 +212,6 @@ def load_config(name: str) -> NormalizeConfig:
             embedding_batch_size=embedding_batch_size,
             embedding_weight_headline=embedding_weight_headline,
             embedding_weight_content=embedding_weight_content,
+            database_enabled=database_enabled,
+            database_batch_size=database_batch_size,
         )

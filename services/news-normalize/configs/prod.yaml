@@ -11,3 +11,8 @@ embeddings:
   batch_size: 32
   weight_headline: 0.3
   weight_content: 0.7
+
+# Database configuration
+database:
+  enabled: true
+  batch_size: 100

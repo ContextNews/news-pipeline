@@ -39,6 +39,7 @@ sentence-transformers = ">=2.2"
 numpy = ">=1.26"
 pycountry = ">=24.6"
 geopy = ">=2.4"
+psycopg2-binary = ">=2.9.11,<3.0"
 
 # Cluster service dependencies
 [tool.poetry.group.cluster.dependencies]

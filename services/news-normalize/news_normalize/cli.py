@@ -89,7 +89,7 @@ def main() -> None:
 
     # Write output
     output_path = build_output_path(config, run_timestamp)
-    write_output(normalized, output_path)
+    write_output(normalized, output_path, config=config)
     logger.info(f"Wrote {len(normalized)} articles to {output_path}")
 
 

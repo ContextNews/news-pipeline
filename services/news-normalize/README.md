@@ -1,6 +1,6 @@
 # news-normalize
 
-Batch normalization service that reads articles from news-ingest, extracts entities via spaCy NER, generates text embeddings, and writes enriched Parquet files to S3.
+Batch normalization service that reads articles from news-ingest, extracts entities via spaCy NER, generates text embeddings, and writes enriched Parquet files to S3 and optionally to a PostgreSQL database.
 
 ## How It Works
 
@@ -13,6 +13,7 @@ Batch normalization service that reads articles from news-ingest, extracts entit
 7. Score locations by frequency + headline presence
 8. Generate embeddings for headline, content, and combined
 9. Write Parquet to S3
+10. Write articles to PostgreSQL database (if enabled)
 
 Safe to re-run—every input article produces exactly one output row.
 
@@ -41,10 +42,44 @@ Runs manually via GitHub Actions workflow dispatch.
 
 ## Configuration
 
-| Config | Storage | SpaCy Model | Embedding Model | Output |
-|--------|---------|-------------|-----------------|--------|
-| `prod` | S3 | transformer | mpnet (768-dim) | Parquet |
-| `test` | S3 → local | small | minilm (384-dim) | JSON |
+| Config | Storage | SpaCy Model | Embedding Model | Database | Output |
+|--------|---------|-------------|-----------------|----------|--------|
+| `prod` | S3 | transformer | mpnet (768-dim) | enabled | Parquet |
+| `test` | S3 → local | small | minilm (384-dim) | disabled | JSON |
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `S3_BUCKET` | Yes (S3 mode) | S3 bucket for input/output |
+| `DATABASE_URL` | Yes (if database enabled) | PostgreSQL connection string |
+
+Example:
+```bash
+export S3_BUCKET=my-news-bucket
+export DATABASE_URL=postgres://user:password@host:5432/dbname
+```
+
+### Database Configuration
+
+When `database.enabled: true` in config, normalized articles are written to the `articles` table:
+
+```sql
+CREATE TABLE articles (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    headline TEXT NOT NULL,
+    url TEXT NOT NULL,
+    published_at TIMESTAMPTZ,
+    fetched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+- Uses batch inserts with `ON CONFLICT DO UPDATE` for safe re-runs
+- Database failures are logged but don't fail the pipeline (S3 is primary)
+- Configure batch size via `database.batch_size` (default: 100)
 
 ## Output Contract
 

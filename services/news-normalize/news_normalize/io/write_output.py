@@ -2,12 +2,19 @@
 
 import csv
 import json
+import logging
 from io import StringIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from news_normalize.schema import NormalizedArticle
 from news_normalize.io.s3 import is_s3_path, write_s3_bytes
 from news_normalize.io.write_parquet import write_parquet
+
+if TYPE_CHECKING:
+    from news_normalize.utils.config_loader import NormalizeConfig
+
+logger = logging.getLogger(__name__)
 
 
 # CSV columns - excludes embeddings (too large) and complex nested fields
@@ -100,11 +107,29 @@ def write_json(articles: list[NormalizedArticle], path: str) -> None:
             f.write(content)
 
 
-def write_output(articles: list[NormalizedArticle], path: str) -> None:
-    """Write articles to output file, detecting format from extension."""
+def write_output(
+    articles: list[NormalizedArticle],
+    path: str,
+    config: "NormalizeConfig | None" = None,
+) -> None:
+    """Write articles to output file, detecting format from extension.
+
+    Also writes to database if database.enabled is True in config.
+    """
+    # Write to file (S3 or local)
     if path.endswith(".json"):
         write_json(articles, path)
     elif path.endswith(".csv"):
         write_csv(articles, path)
     else:
         write_parquet(articles, path)
+
+    # Write to database if enabled
+    if config and config.database_enabled:
+        try:
+            from news_normalize.io.db import write_articles_to_db
+
+            write_articles_to_db(articles, batch_size=config.database_batch_size)
+        except Exception as e:
+            logger.error(f"Database write failed: {e}")
+            # Pipeline continues - S3 write already succeeded
