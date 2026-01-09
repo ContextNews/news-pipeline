@@ -27,51 +27,57 @@ def _get_model(model_key: str):
     return _model_cache[model_key]
 
 
-def prepare_embedding_text(
+def prepare_text(
     title: Optional[str],
     summary: Optional[str],
     article_text: Optional[str],
-    model_key: str = "minilm",
+    max_article_words: int = 250,
 ) -> Optional[str]:
-    """Combine title, summary, and article text, truncated to model's max tokens.
+    """Combine title, summary, and article text with word limit on article.
 
     Args:
         title: Article title
         summary: Article summary
         article_text: Cleaned article text
-        model_key: Embedding model key
+        max_article_words: Maximum words to include from article text
 
     Returns:
-        Combined text truncated to max tokens, or None if no text
+        Combined text (title + summary + truncated article), or None if no text
     """
-    # Combine non-empty parts with newlines
     parts = []
+
     if title and title.strip():
         parts.append(title.strip())
+
     if summary and summary.strip():
         parts.append(summary.strip())
+
     if article_text and article_text.strip():
-        parts.append(article_text.strip())
+        # Truncate article to max words without cutting sentences
+        words = article_text.split()
+        if len(words) <= max_article_words:
+            parts.append(article_text.strip())
+        else:
+            # Take up to max_article_words, then find sentence boundary
+            truncated_words = words[:max_article_words]
+            truncated = " ".join(truncated_words)
+
+            # Try to end at a sentence boundary
+            last_period = truncated.rfind(". ")
+            last_question = truncated.rfind("? ")
+            last_exclaim = truncated.rfind("! ")
+            last_boundary = max(last_period, last_question, last_exclaim)
+
+            if last_boundary > len(truncated) // 2:
+                # Only truncate at boundary if it's not too early in the text
+                truncated = truncated[:last_boundary + 1]
+
+            parts.append(truncated.strip())
 
     if not parts:
         return None
 
-    combined = "\n\n".join(parts)
-
-    # Truncate to max tokens using the model's tokenizer
-    model = _get_model(model_key)
-    max_tokens = EMBEDDING_MODELS[model_key]["max_tokens"]
-
-    tokenizer = model.tokenizer
-    encoded = tokenizer(
-        combined,
-        truncation=True,
-        max_length=max_tokens,
-        return_attention_mask=False,
-    )
-
-    truncated = tokenizer.decode(encoded["input_ids"], skip_special_tokens=True)
-    return truncated if truncated.strip() else None
+    return "\n\n".join(parts)
 
 
 def compute_embeddings_batch(

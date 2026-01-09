@@ -1,4 +1,3 @@
-from collections import Counter
 from typing import Optional
 
 import spacy
@@ -27,12 +26,16 @@ def _get_nlp(model_key: str) -> spacy.Language:
 
 
 def _entities_from_doc(doc) -> list[Entity]:
-    """Extract entities from a spaCy doc."""
-    counts: Counter[tuple[str, str]] = Counter()
+    """Extract unique entities from a spaCy doc."""
+    seen: set[tuple[str, str]] = set()
+    entities: list[Entity] = []
     for ent in doc.ents:
         if ent.label_ in ENTITY_TYPES:
-            counts[(ent.text, ent.label_)] += 1
-    return [Entity(text=text, type=label, count=count) for (text, label), count in counts.most_common()]
+            key = (ent.text, ent.label_)
+            if key not in seen:
+                seen.add(key)
+                entities.append(Entity(name=ent.text, type=ent.label_))
+    return entities
 
 
 def extract_entities(text: Optional[str], model_key: str = "trf") -> list[Entity]:

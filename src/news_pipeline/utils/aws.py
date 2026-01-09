@@ -43,6 +43,17 @@ def upload_jsonl_to_s3(
     )
 
 
+def upload_csv_to_s3(csv_content: str, bucket: str, key: str) -> None:
+    """Upload CSV string to S3."""
+    s3 = get_s3_client()
+    s3.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=csv_content.encode("utf-8"),
+        ContentType="text/csv",
+    )
+
+
 def list_s3_jsonl_files(bucket: str, prefix: str) -> list[str]:
     """List all .jsonl files under an S3 prefix."""
     s3 = get_s3_client()
