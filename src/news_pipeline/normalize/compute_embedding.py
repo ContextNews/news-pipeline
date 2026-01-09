@@ -3,8 +3,6 @@
 import logging
 from typing import Optional
 
-import numpy as np
-
 logger = logging.getLogger(__name__)
 
 EMBEDDING_MODELS = {
@@ -29,28 +27,51 @@ def _get_model(model_key: str):
     return _model_cache[model_key]
 
 
-def compute_embedding(text: Optional[str], model_key: str = "minilm") -> Optional[list[float]]:
-    """Compute embedding for text. Returns None if text is empty."""
-    if not text or not text.strip():
+def prepare_embedding_text(
+    title: Optional[str],
+    summary: Optional[str],
+    article_text: Optional[str],
+    model_key: str = "minilm",
+) -> Optional[str]:
+    """Combine title, summary, and article text, truncated to model's max tokens.
+
+    Args:
+        title: Article title
+        summary: Article summary
+        article_text: Cleaned article text
+        model_key: Embedding model key
+
+    Returns:
+        Combined text truncated to max tokens, or None if no text
+    """
+    # Combine non-empty parts with newlines
+    parts = []
+    if title and title.strip():
+        parts.append(title.strip())
+    if summary and summary.strip():
+        parts.append(summary.strip())
+    if article_text and article_text.strip():
+        parts.append(article_text.strip())
+
+    if not parts:
         return None
 
+    combined = "\n\n".join(parts)
+
+    # Truncate to max tokens using the model's tokenizer
     model = _get_model(model_key)
-    model_info = EMBEDDING_MODELS[model_key]
+    max_tokens = EMBEDDING_MODELS[model_key]["max_tokens"]
 
-    # Check if chunking needed
-    max_chars = model_info["max_tokens"] * 4
-    if len(text) <= max_chars:
-        embedding = model.encode(text, convert_to_numpy=True)
-        return embedding.tolist()
+    tokenizer = model.tokenizer
+    encoded = tokenizer(
+        combined,
+        truncation=True,
+        max_length=max_tokens,
+        return_attention_mask=False,
+    )
 
-    # Split into chunks and mean pool
-    chunks = []
-    for i in range(0, len(text), max_chars - 100):
-        chunks.append(text[i:i + max_chars])
-
-    embeddings = model.encode(chunks, convert_to_numpy=True)
-    pooled = np.mean(embeddings, axis=0)
-    return pooled.tolist()
+    truncated = tokenizer.decode(encoded["input_ids"], skip_special_tokens=True)
+    return truncated if truncated.strip() else None
 
 
 def compute_embeddings_batch(
@@ -59,6 +80,8 @@ def compute_embeddings_batch(
     batch_size: int = 32,
 ) -> list[Optional[list[float]]]:
     """Compute embeddings for multiple texts in batches.
+
+    Texts should already be prepared/truncated via prepare_embedding_text().
 
     Args:
         texts: List of texts (can contain None or empty strings)
@@ -72,48 +95,30 @@ def compute_embeddings_batch(
         return []
 
     model = _get_model(model_key)
-    model_info = EMBEDDING_MODELS[model_key]
-    max_chars = model_info["max_tokens"] * 4
 
-    # Track which texts need processing and which need chunking
+    # Filter valid texts and track indices
     results: list[Optional[list[float]]] = [None] * len(texts)
-    simple_indices: list[int] = []
-    simple_texts: list[str] = []
-
-    # For chunked texts, track article index and chunk ranges
-    chunked_indices: list[int] = []
-    all_chunks: list[str] = []
-    chunk_ranges: list[tuple[int, int]] = []  # (start, end) indices into all_chunks
+    valid_indices: list[int] = []
+    valid_texts: list[str] = []
 
     for i, text in enumerate(texts):
-        if not text or not text.strip():
-            continue
-        if len(text) <= max_chars:
-            simple_indices.append(i)
-            simple_texts.append(text)
-        else:
-            chunked_indices.append(i)
-            start_idx = len(all_chunks)
-            for j in range(0, len(text), max_chars - 100):
-                all_chunks.append(text[j:j + max_chars])
-            chunk_ranges.append((start_idx, len(all_chunks)))
+        if text and text.strip():
+            valid_indices.append(i)
+            valid_texts.append(text)
 
-    # Batch encode simple texts
-    if simple_texts:
-        logger.info(f"Batch encoding {len(simple_texts)} short texts (batch_size={batch_size})")
-        embeddings = model.encode(simple_texts, batch_size=batch_size, convert_to_numpy=True, show_progress_bar=False)
-        for idx, emb in zip(simple_indices, embeddings):
-            results[idx] = emb.tolist()
+    if not valid_texts:
+        return results
 
-    # Batch encode all chunks at once, then reassemble per article
-    if all_chunks:
-        logger.info(f"Batch encoding {len(all_chunks)} chunks from {len(chunked_indices)} long texts (batch_size={batch_size})")
-        chunk_embeddings = model.encode(all_chunks, batch_size=batch_size, convert_to_numpy=True, show_progress_bar=False)
+    # Batch encode all texts
+    logger.info(f"Batch encoding {len(valid_texts)} texts (batch_size={batch_size})")
+    embeddings = model.encode(
+        valid_texts,
+        batch_size=batch_size,
+        convert_to_numpy=True,
+        show_progress_bar=False,
+    )
 
-        # Mean pool chunks for each article
-        for article_idx, (start, end) in zip(chunked_indices, chunk_ranges):
-            article_embeddings = chunk_embeddings[start:end]
-            pooled = np.mean(article_embeddings, axis=0)
-            results[article_idx] = pooled.tolist()
+    for idx, emb in zip(valid_indices, embeddings):
+        results[idx] = emb.tolist()
 
     return results

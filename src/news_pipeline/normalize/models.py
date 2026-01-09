@@ -57,5 +57,6 @@ class NormalizedArticle:
     normalized_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Embeddings (optional)
+    embedding_text: Optional[str] = None
     embedding: Optional[list[float]] = None
     embedding_model: Optional[str] = None
