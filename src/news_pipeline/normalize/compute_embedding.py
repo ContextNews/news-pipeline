@@ -79,7 +79,11 @@ def compute_embeddings_batch(
     results: list[Optional[list[float]]] = [None] * len(texts)
     simple_indices: list[int] = []
     simple_texts: list[str] = []
+
+    # For chunked texts, track article index and chunk ranges
     chunked_indices: list[int] = []
+    all_chunks: list[str] = []
+    chunk_ranges: list[tuple[int, int]] = []  # (start, end) indices into all_chunks
 
     for i, text in enumerate(texts):
         if not text or not text.strip():
@@ -89,25 +93,27 @@ def compute_embeddings_batch(
             simple_texts.append(text)
         else:
             chunked_indices.append(i)
+            start_idx = len(all_chunks)
+            for j in range(0, len(text), max_chars - 100):
+                all_chunks.append(text[j:j + max_chars])
+            chunk_ranges.append((start_idx, len(all_chunks)))
 
     # Batch encode simple texts
     if simple_texts:
-        logger.info(f"Batch encoding {len(simple_texts)} texts (batch_size={batch_size})")
-        embeddings = model.encode(simple_texts, batch_size=batch_size, convert_to_numpy=True)
+        logger.info(f"Batch encoding {len(simple_texts)} short texts (batch_size={batch_size})")
+        embeddings = model.encode(simple_texts, batch_size=batch_size, convert_to_numpy=True, show_progress_bar=False)
         for idx, emb in zip(simple_indices, embeddings):
             results[idx] = emb.tolist()
 
-    # Handle chunked texts individually (they need mean pooling)
-    for i in chunked_indices:
-        text = texts[i]
-        chunks = []
-        for j in range(0, len(text), max_chars - 100):
-            chunks.append(text[j:j + max_chars])
-        embeddings = model.encode(chunks, convert_to_numpy=True)
-        pooled = np.mean(embeddings, axis=0)
-        results[i] = pooled.tolist()
+    # Batch encode all chunks at once, then reassemble per article
+    if all_chunks:
+        logger.info(f"Batch encoding {len(all_chunks)} chunks from {len(chunked_indices)} long texts (batch_size={batch_size})")
+        chunk_embeddings = model.encode(all_chunks, batch_size=batch_size, convert_to_numpy=True, show_progress_bar=False)
 
-    if chunked_indices:
-        logger.info(f"Processed {len(chunked_indices)} texts requiring chunking")
+        # Mean pool chunks for each article
+        for article_idx, (start, end) in zip(chunked_indices, chunk_ranges):
+            article_embeddings = chunk_embeddings[start:end]
+            pooled = np.mean(article_embeddings, axis=0)
+            results[article_idx] = pooled.tolist()
 
     return results
