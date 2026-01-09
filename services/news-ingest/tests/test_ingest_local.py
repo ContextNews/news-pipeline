@@ -4,28 +4,23 @@ from pathlib import Path
 
 import pytest
 
-from news_ingest.config import load_config, set_config, reset_config
-from ingest import generate_article_id
+from news_ingest.cli import load_config
+from news_ingest.config import Config
+from news_ingest.ingest import generate_article_id, normalize_article
 
 
-# Load test config before tests run
-@pytest.fixture(autouse=True)
-def use_test_config():
-    """Use test configuration for all tests.
-
-    Disables resolution to avoid network calls during unit tests.
-    """
-    config = load_config("test")
-    config.resolve.enabled = False  # Disable for unit tests
-    set_config(config)
-    yield
-    reset_config()
+@pytest.fixture
+def config() -> Config:
+    """Load test configuration with resolution disabled."""
+    cfg = load_config("test")
+    cfg.resolve_enabled = False  # Disable for unit tests
+    return cfg
 
 
 @pytest.fixture
 def output_dir():
     """Get the test output directory."""
-    path = Path("tests/output")
+    path = Path(__file__).parent / "output"
     path.mkdir(exist_ok=True)
     return path
 
@@ -40,25 +35,21 @@ def test_article_id_is_deterministic():
     assert id1 != id3  # Different source = different ID
 
 
-def test_config_loads_correctly():
+def test_config_loads_correctly(config):
     """Verify test config loads with expected values."""
-    from news_ingest.config import get_config
-    config = get_config()
-
-    assert config.storage.backend == "local"
-    assert config.state.backend == "memory"
-    assert config.output.format == "jsonl"
-    assert config.output.compress is False
-    assert config.resolve.enabled is False  # Disabled by test fixture
+    assert config.storage_backend == "local"
+    assert config.state_backend == "memory"
+    assert config.output_format == "jsonl"
+    assert config.output_compress is False
+    assert config.resolve_enabled is False  # Disabled by fixture
     assert "bbc" in config.sources
 
 
-def test_ingest_with_test_config(output_dir):
+def test_ingest_with_test_config(config, output_dir):
     """Run ingestion with test config, verify JSONL output."""
     import json
     from datetime import datetime, timezone, timedelta
     from news_ingest.sources import bbc
-    from ingest import normalize_article
     from news_ingest.storage.s3 import upload_articles
 
     # Fetch a few articles
@@ -67,7 +58,7 @@ def test_ingest_with_test_config(output_dir):
 
     articles = []
     for raw in bbc.fetch_articles(since):
-        normalized = normalize_article(raw, "bbc", fetched_at)
+        normalized = normalize_article(raw, "bbc", fetched_at, config)
         articles.append(normalized)
         if len(articles) >= 5:  # Limit for faster tests
             break
@@ -76,7 +67,7 @@ def test_ingest_with_test_config(output_dir):
         pytest.skip("No articles fetched from BBC")
 
     # Upload (goes to local JSONL due to test config)
-    output_path = upload_articles(articles, fetched_at)
+    output_path = upload_articles(articles, fetched_at, config)
 
     # Verify output
     assert Path(output_path).exists()

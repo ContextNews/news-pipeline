@@ -20,11 +20,11 @@ Safe to re-run—duplicates are acceptable, data loss is not.
 poetry install
 
 # Local test (no S3/Postgres required)
-poetry run python ingest.py --config test
+poetry run python -m news_ingest.cli --config test
 
 # Production
 cp .env.example .env  # add credentials
-poetry run python ingest.py
+poetry run python -m news_ingest.cli --config prod
 ```
 
 Runs automatically via GitHub Actions every 6 hours.

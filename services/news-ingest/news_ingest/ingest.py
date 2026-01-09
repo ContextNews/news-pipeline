@@ -1,27 +1,20 @@
-#!/usr/bin/env python3
-"""News ingestion service entrypoint.
+"""Core ingestion logic for news-ingest service.
 
 Fetches articles from configured sources, normalizes them to a fixed schema,
 and writes append-only JSONL files to S3-compatible object storage.
 """
 
-import argparse
 import hashlib
 import logging
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from news_ingest.config import load_config, set_config, get_config
+from news_ingest.config import Config
 from news_ingest.resolve import resolve_article
 from news_ingest.sources import get_source_module
 from news_ingest.state.db import ensure_table, get_last_fetched_at, update_last_fetched_at
 from news_ingest.storage.s3 import upload_articles
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -31,16 +24,14 @@ def generate_article_id(source: str, url: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
 
-def normalize_article(raw: dict, source: str, fetched_at: datetime) -> dict:
+def normalize_article(raw: dict, source: str, fetched_at: datetime, config: Config) -> dict:
     """Normalize a raw article to the canonical schema.
 
     Resolves full article content if resolve is enabled in config.
     """
-    config = get_config()
-
     # Resolve full article content
-    if config.resolve.enabled:
-        result = resolve_article(raw["url"])
+    if config.resolve_enabled:
+        result = resolve_article(raw["url"], config)
         content = result.text
         resolution = {
             "success": result.success,
@@ -69,22 +60,22 @@ def normalize_article(raw: dict, source: str, fetched_at: datetime) -> dict:
     }
 
 
-def fetch_source(source_id: str, run_timestamp: datetime) -> list[dict]:
+def fetch_source(source_id: str, run_timestamp: datetime, config: Config) -> list[dict]:
     """Fetch and normalize articles from a single source.
 
     Args:
         source_id: The source identifier
         run_timestamp: Timestamp for this ingestion run
+        config: Configuration object
 
     Returns:
         List of normalized article dictionaries
     """
-    config = get_config()
     logger.info(f"Starting fetch for source: {source_id}")
     start_time = time.monotonic()
 
     # Get last fetched timestamp or default lookback
-    since = get_last_fetched_at(source_id)
+    since = get_last_fetched_at(source_id, config)
     if since is None:
         since = run_timestamp - timedelta(hours=config.lookback_hours)
         logger.info(f"No previous state for {source_id}, using lookback: {since.isoformat()}")
@@ -98,7 +89,7 @@ def fetch_source(source_id: str, run_timestamp: datetime) -> list[dict]:
 
     for raw_article in source_module.fetch_articles(since):
         try:
-            normalized = normalize_article(raw_article, source_id, run_timestamp)
+            normalized = normalize_article(raw_article, source_id, run_timestamp, config)
             articles.append(normalized)
         except Exception as e:
             logger.warning(f"Failed to normalize article: {e}")
@@ -111,35 +102,29 @@ def fetch_source(source_id: str, run_timestamp: datetime) -> list[dict]:
     return articles
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Ingest news articles from configured sources"
-    )
-    parser.add_argument(
-        "--config",
-        default=None,
-        help="Config file to use: 'prod' (S3 + Postgres) or 'test' (local). Defaults to 'prod'",
-    )
-    args = parser.parse_args()
+def ingest(config: Config) -> int:
+    """Run the ingestion pipeline with the given configuration.
 
-    # Load configuration
-    config = load_config(args.config)
-    set_config(config)
+    Args:
+        config: Configuration object
 
+    Returns:
+        Exit code (0 for success, 1 if any source failed)
+    """
     run_timestamp = datetime.now(timezone.utc)
     logger.info(f"Starting ingestion run at {run_timestamp.isoformat()}")
     logger.info(f"Sources: {config.sources}")
-    logger.info(f"Storage backend: {config.storage.backend}")
-    logger.info(f"State backend: {config.state.backend}")
-    logger.info(f"Output format: {config.output.format}")
+    logger.info(f"Storage backend: {config.storage_backend}")
+    logger.info(f"State backend: {config.state_backend}")
+    logger.info(f"Output format: {config.output_format}")
 
     # Ensure database table exists (no-op for memory backend)
-    ensure_table()
+    ensure_table(config)
 
     source_ids = config.sources
     if not source_ids:
         logger.warning("No sources configured")
-        return
+        return 0
 
     all_articles = []
     successful_sources = []
@@ -148,7 +133,7 @@ def main():
     # Fetch articles from all sources
     for source_id in source_ids:
         try:
-            articles = fetch_source(source_id, run_timestamp)
+            articles = fetch_source(source_id, run_timestamp, config)
             all_articles.extend(articles)
             successful_sources.append(source_id)
         except Exception as e:
@@ -160,24 +145,22 @@ def main():
 
     # Upload all articles to a single file
     if all_articles:
-        output_path = upload_articles(all_articles, run_timestamp)
+        output_path = upload_articles(all_articles, run_timestamp, config)
         logger.info(f"Uploaded to: {output_path}")
 
         # Update state for all successful sources after upload
         for source_id in successful_sources:
-            update_last_fetched_at(source_id, run_timestamp)
+            update_last_fetched_at(source_id, run_timestamp, config)
     else:
         logger.info("No articles fetched, skipping upload")
         # Still update state for sources that returned no articles
         for source_id in successful_sources:
-            update_last_fetched_at(source_id, run_timestamp)
+            update_last_fetched_at(source_id, run_timestamp, config)
 
     logger.info(f"Ingestion complete: {len(all_articles)} total articles")
 
     if failed_sources:
         logger.error(f"Failed sources: {failed_sources}")
-        sys.exit(1)
+        return 1
 
-
-if __name__ == "__main__":
-    main()
+    return 0

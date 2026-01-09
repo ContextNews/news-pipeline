@@ -7,7 +7,7 @@ import trafilatura
 from lxml import html as lxml_html
 from readability import Document
 
-from news_ingest.config import get_config
+from news_ingest.config import Config
 
 
 def extract_with_trafilatura(url: str) -> Optional[str]:
@@ -18,10 +18,9 @@ def extract_with_trafilatura(url: str) -> Optional[str]:
     return trafilatura.extract(downloaded)
 
 
-def extract_with_readability(url: str) -> Optional[str]:
+def extract_with_readability(url: str, config: Config) -> Optional[str]:
     """Extract article text using readability-lxml as fallback."""
-    config = get_config()
-    response = requests.get(url, timeout=config.resolve.request_timeout)
+    response = requests.get(url, timeout=config.resolve_request_timeout)
     response.raise_for_status()
     doc = Document(response.text)
     summary_html = doc.summary()

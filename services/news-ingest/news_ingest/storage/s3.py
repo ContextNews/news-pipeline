@@ -10,7 +10,7 @@ from pathlib import Path
 
 import boto3
 
-from news_ingest.config import get_config
+from news_ingest.config import Config
 
 
 def get_s3_client():
@@ -71,12 +71,13 @@ def _serialize_csv(articles: list[dict]) -> tuple[bytes, str]:
     return buffer.getvalue().encode("utf-8"), "csv"
 
 
-def upload_articles(articles: list[dict], timestamp: datetime) -> str:
+def upload_articles(articles: list[dict], timestamp: datetime, config: Config) -> str:
     """Upload articles using the configured storage backend.
 
     Args:
         articles: List of article dictionaries to upload
         timestamp: Timestamp for partitioning
+        config: Configuration object
 
     Returns:
         The path/key where the file was uploaded
@@ -88,17 +89,15 @@ def upload_articles(articles: list[dict], timestamp: datetime) -> str:
     if not articles:
         raise ValueError("Cannot upload empty articles list")
 
-    config = get_config()
-
     # Serialize based on output format
-    if config.output.format == "csv":
+    if config.output_format == "csv":
         content, extension = _serialize_csv(articles)
     else:
-        content, extension = _serialize_jsonl(articles, config.output.compress)
+        content, extension = _serialize_jsonl(articles, config.output_compress)
 
     # Upload based on storage backend
-    if config.storage.backend == "local":
-        return _upload_local(content, timestamp, extension, config.storage.local_path)
+    if config.storage_backend == "local":
+        return _upload_local(content, timestamp, extension, config.storage_local_path)
     else:
         return _upload_s3(content, timestamp, extension)
 

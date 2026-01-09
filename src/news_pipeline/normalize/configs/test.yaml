@@ -1,0 +1,3 @@
+output: local
+spacy_model: sm
+embedding_enabled: false

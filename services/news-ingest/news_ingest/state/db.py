@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from news_ingest.config import get_config
+from news_ingest.config import Config
 
 load_dotenv()
 
@@ -36,10 +36,9 @@ def get_cursor():
         conn.close()
 
 
-def ensure_table():
+def ensure_table(config: Config) -> None:
     """Create the source_state table if it doesn't exist (postgres only)."""
-    config = get_config()
-    if config.state.backend != "postgres":
+    if config.state_backend != "postgres":
         return
 
     with get_cursor() as cur:
@@ -51,14 +50,12 @@ def ensure_table():
         """)
 
 
-def get_last_fetched_at(source_id: str) -> datetime | None:
+def get_last_fetched_at(source_id: str, config: Config) -> datetime | None:
     """Get the last fetched timestamp for a source.
 
     Returns None if the source has never been fetched.
     """
-    config = get_config()
-
-    if config.state.backend == "memory":
+    if config.state_backend == "memory":
         return _memory_state.get(source_id)
 
     with get_cursor() as cur:
@@ -72,7 +69,7 @@ def get_last_fetched_at(source_id: str) -> datetime | None:
         return row["last_fetched_at"]
 
 
-def update_last_fetched_at(source_id: str, timestamp: datetime):
+def update_last_fetched_at(source_id: str, timestamp: datetime, config: Config) -> None:
     """Update the last fetched timestamp for a source.
 
     Uses upsert to handle both new and existing sources.
@@ -80,9 +77,7 @@ def update_last_fetched_at(source_id: str, timestamp: datetime):
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=timezone.utc)
 
-    config = get_config()
-
-    if config.state.backend == "memory":
+    if config.state_backend == "memory":
         _memory_state[source_id] = timestamp
         return
 
@@ -93,9 +88,3 @@ def update_last_fetched_at(source_id: str, timestamp: datetime):
             ON CONFLICT (source_id)
             DO UPDATE SET last_fetched_at = EXCLUDED.last_fetched_at
         """, (source_id, timestamp))
-
-
-def reset_memory_state():
-    """Reset in-memory state (useful for testing)."""
-    global _memory_state
-    _memory_state = {}

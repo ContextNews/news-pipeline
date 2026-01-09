@@ -13,9 +13,7 @@ RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --only main
 
 # Copy application code
-COPY ingest.py .
-COPY sources/ sources/
-COPY state/ state/
-COPY storage/ storage/
+COPY news_ingest/ news_ingest/
+COPY configs/ configs/
 
-ENTRYPOINT ["python", "ingest.py"]
+ENTRYPOINT ["python", "-m", "news_ingest.cli"]

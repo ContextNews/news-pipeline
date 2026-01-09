@@ -3,34 +3,17 @@ name: Normalize
 on:
   workflow_dispatch:
 
-env:
-  S3_BUCKET: ${{ secrets.S3_BUCKET }}
-
 jobs:
   normalize:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate S3_BUCKET secret
-        run: |
-          if [ -z "$S3_BUCKET" ]; then
-            echo "::error::Missing required secret: S3_BUCKET"
-            exit 1
-          fi
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
-
       - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
@@ -40,14 +23,15 @@ jobs:
           virtualenvs-in-project: true
 
       - name: Load cached venv
-        id: cache-venv
+        id: cached-poetry-dependencies
         uses: actions/cache@v4
         with:
           path: .venv
           key: venv-normalize-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        run: poetry install --no-interaction --no-root --without ingest
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root --with normalize
 
       - name: Load cached models
         id: cache-models
@@ -56,7 +40,7 @@ jobs:
           path: |
             ~/.cache/huggingface
             ~/.cache/torch
-          key: models-normalize-${{ runner.os }}-${{ hashFiles('services/news-normalize/configs/prod.yaml') }}
+          key: models-normalize-${{ runner.os }}-${{ hashFiles('src/news_pipeline/normalize/configs/prod.yaml') }}
 
       - name: Download spaCy model
         run: poetry run python -m spacy download en_core_web_trf
@@ -66,4 +50,9 @@ jobs:
         run: poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
 
       - name: Run normalization
-        run: PYTHONPATH=services/news-normalize poetry run python -m news_normalize.cli --config prod
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: poetry run python -m news_pipeline.normalize.run prod

@@ -34,7 +34,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root --without normalize
+        run: poetry install --no-interaction --no-root --with ingest
 
       - name: Run ingestion
         env:
@@ -42,5 +42,4 @@ jobs:
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: poetry run python services/news-ingest/ingest.py --config prod
+        run: poetry run python -m news_pipeline.ingest.run prod
