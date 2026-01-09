@@ -37,12 +37,11 @@ jobs:
         id: cache-models
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/huggingface
-            ~/.cache/torch
-          key: models-normalize-${{ runner.os }}-${{ hashFiles('src/news_pipeline/normalize/configs/prod.yaml') }}
+          path: ~/.cache/huggingface
+          key: models-normalize-${{ runner.os }}-huggingface-v1
 
       - name: Download spaCy model
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry run python -m spacy download en_core_web_trf
 
       - name: Download embedding model
