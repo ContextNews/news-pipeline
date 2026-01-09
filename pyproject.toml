@@ -1,5 +1,5 @@
 [tool.poetry]
-package-mode = false
+packages = [{include = "news_pipeline", from = "src"}]
 
 [project]
 name = "news-pipeline"
