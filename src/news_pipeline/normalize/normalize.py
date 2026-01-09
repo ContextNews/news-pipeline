@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from news_pipeline.normalize.clean_text import clean_text
 from news_pipeline.normalize.extract_entities import extract_entities_batch
 from news_pipeline.normalize.get_locations import get_locations
-from news_pipeline.normalize.compute_embedding import compute_embedding
+from news_pipeline.normalize.compute_embedding import compute_embeddings_batch
 from news_pipeline.normalize.models import NormalizedArticle
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ def normalize(
     spacy_model: str = "trf",
     embedding_enabled: bool = False,
     embedding_model: str = "minilm",
+    embedding_batch_size: int = 32,
 ) -> list[NormalizedArticle]:
     """
     Normalize raw articles: clean text, extract entities, get locations, compute embeddings.
@@ -26,6 +27,7 @@ def normalize(
         spacy_model: spaCy model key (sm, lg, trf)
         embedding_enabled: Whether to compute embeddings
         embedding_model: Embedding model key (minilm, mpnet)
+        embedding_batch_size: Batch size for embedding computation
 
     Returns:
         List of NormalizedArticle objects
@@ -48,18 +50,21 @@ def normalize(
     logger.info(f"Running NER on {len(raw_articles)} articles (model: {spacy_model})")
     all_entities = extract_entities_batch(cleaned_texts, model_key=spacy_model)
 
+    # Batch embeddings
+    all_embeddings: list = [None] * len(raw_articles)
+    if embedding_enabled:
+        logger.info(f"Computing embeddings for {len(raw_articles)} articles (model: {embedding_model})")
+        all_embeddings = compute_embeddings_batch(
+            cleaned_texts,
+            model_key=embedding_model,
+            batch_size=embedding_batch_size,
+        )
+
     # Build normalized articles
     results = []
     for i, raw in enumerate(raw_articles):
         entities = all_entities[i]
         locations = get_locations(entities, raw.get("title", ""))
-
-        # Compute embedding if enabled
-        embedding = None
-        emb_model = None
-        if embedding_enabled and cleaned_texts[i]:
-            embedding = compute_embedding(cleaned_texts[i], model_key=embedding_model)
-            emb_model = embedding_model
 
         article_text = raw.get("article_text", {})
         text = article_text.get("text") if isinstance(article_text, dict) else None
@@ -78,8 +83,8 @@ def normalize(
             entities=entities,
             locations=locations,
             normalized_at=now,
-            embedding=embedding,
-            embedding_model=emb_model,
+            embedding=all_embeddings[i],
+            embedding_model=embedding_model if all_embeddings[i] else None,
         ))
 
     logger.info(f"Normalized {len(results)} articles")

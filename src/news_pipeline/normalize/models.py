@@ -10,6 +10,7 @@ class NormalizeConfig:
     spacy_model: str = "trf"
     embedding_enabled: bool = False
     embedding_model: str = "minilm"
+    embedding_batch_size: int = 32
 
 
 @dataclass

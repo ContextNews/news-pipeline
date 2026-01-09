@@ -68,6 +68,7 @@ def main():
         spacy_model=config.spacy_model,
         embedding_enabled=config.embedding_enabled,
         embedding_model=config.embedding_model,
+        embedding_batch_size=config.embedding_batch_size,
     )
 
     if not normalized:

@@ -2,3 +2,4 @@ output: s3
 spacy_model: trf
 embedding_enabled: true
 embedding_model: mpnet
+embedding_batch_size: 32
