@@ -1,11 +1,11 @@
-name: Ingest
+name: Clean
 
 on:
   workflow_call:
   workflow_dispatch:
 
 jobs:
-  ingest:
+  clean:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -37,13 +37,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-ingest-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-clean-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --with ingest
+        run: poetry install --no-interaction
 
-      - name: Run ingestion
+      - name: Run clean
         env:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-        run: poetry run python -m news_pipeline.ingest.run prod
+        run: poetry run python -m news_pipeline.clean.run
