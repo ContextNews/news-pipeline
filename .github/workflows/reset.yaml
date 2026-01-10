@@ -46,7 +46,7 @@ jobs:
 
           client = boto3.client('s3')
           bucket = os.environ['S3_BUCKET_NAME']
-          prefix = 'news-raw/'
+          prefix = 'ingested_articles/'
 
           paginator = client.get_paginator('list_objects_v2')
           deleted = 0

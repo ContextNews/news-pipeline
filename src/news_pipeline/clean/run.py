@@ -64,8 +64,8 @@ def main():
     bucket = os.environ["S3_BUCKET_NAME"]
     now = datetime.now(timezone.utc)
 
-    # Read input articles from S3 (news-raw)
-    input_prefix = build_s3_key("news-raw", period_dt, "")[:-1]
+    # Read input articles from S3 (ingested_articles)
+    input_prefix = build_s3_key("ingested_articles", period_dt, "")[:-1]
     input_files = list_s3_jsonl_files(bucket, input_prefix)
 
     if not input_files:
