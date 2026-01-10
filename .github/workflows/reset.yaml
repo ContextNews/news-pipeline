@@ -9,8 +9,8 @@ on:
         type: choice
         options:
           - all
-          - raw
-          - normalized
+          - ingested
+          - cleaned
         default: 'all'
       confirm:
         description: 'Type "RESET" to confirm deletion'
@@ -21,47 +21,31 @@ jobs:
   reset:
     runs-on: ubuntu-latest
     if: ${{ inputs.confirm == 'RESET' }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
-      - name: Install dependencies
-        run: pip install psycopg2-binary boto3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
 
-      - name: Clear ingest state (Postgres)
-        if: ${{ inputs.target == 'all' || inputs.target == 'raw' }}
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          python -c "
-          import os
-          import psycopg2
-          conn = psycopg2.connect(os.environ['DATABASE_URL'])
-          cur = conn.cursor()
-          cur.execute('DELETE FROM source_state')
-          conn.commit()
-          print(f'Deleted {cur.rowcount} rows from source_state')
-          conn.close()
-          "
+      - name: Install boto3
+        run: pip install boto3
 
-      - name: Clear raw data (S3)
-        if: ${{ inputs.target == 'all' || inputs.target == 'raw' }}
+      - name: Clear ingested data (S3)
+        if: ${{ inputs.target == 'all' || inputs.target == 'ingested' }}
         env:
-          S3_BUCKET: ${{ secrets.S3_BUCKET }}
-          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
         run: |
           python -c "
           import os
           import boto3
 
-          client = boto3.client(
-              's3',
-              endpoint_url=os.environ.get('S3_ENDPOINT'),
-              aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-              aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-          )
-
-          bucket = os.environ['S3_BUCKET']
+          client = boto3.client('s3')
+          bucket = os.environ['S3_BUCKET_NAME']
           prefix = 'news-raw/'
 
           paginator = client.get_paginator('list_objects_v2')
@@ -78,27 +62,18 @@ jobs:
           print(f'Deleted {deleted} objects from s3://{bucket}/{prefix}')
           "
 
-      - name: Clear normalized data (S3)
-        if: ${{ inputs.target == 'all' || inputs.target == 'normalized' }}
+      - name: Clear cleaned data (S3)
+        if: ${{ inputs.target == 'all' || inputs.target == 'cleaned' }}
         env:
-          S3_BUCKET: ${{ secrets.S3_BUCKET }}
-          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
         run: |
           python -c "
           import os
           import boto3
 
-          client = boto3.client(
-              's3',
-              endpoint_url=os.environ.get('S3_ENDPOINT'),
-              aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-              aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-          )
-
-          bucket = os.environ['S3_BUCKET']
-          prefix = 'news-normalized/'
+          client = boto3.client('s3')
+          bucket = os.environ['S3_BUCKET_NAME']
+          prefix = 'cleaned_articles/'
 
           paginator = client.get_paginator('list_objects_v2')
           deleted = 0
