@@ -41,8 +41,7 @@ def normalize(
     # Clean article text
     cleaned_texts = []
     for raw in raw_articles:
-        article_text = raw.get("article_text", {})
-        text = article_text.get("text") if isinstance(article_text, dict) else None
+        text = raw.get("text")
         cleaned_texts.append(clean_text(text))
 
     # Prepare processed text (title + summary + article truncated to max words)
@@ -73,9 +72,6 @@ def normalize(
     # Build normalized articles
     results = []
     for i, raw in enumerate(raw_articles):
-        article_text = raw.get("article_text", {})
-        text = article_text.get("text") if isinstance(article_text, dict) else None
-
         results.append(NormalizedArticle(
             id=raw["id"],
             source=raw["source"],
@@ -83,8 +79,8 @@ def normalize(
             summary=raw.get("summary", ""),
             url=raw["url"],
             published_at=_parse_datetime(raw.get("published_at")),
-            fetched_at=_parse_datetime(raw.get("fetched_at")),
-            article_text=text,
+            ingested_at=_parse_datetime(raw.get("ingested_at")),
+            article_text=raw.get("text"),
             article_text_clean=cleaned_texts[i],
             article_text_processed=processed_texts[i],
             ner_model=spacy_model,

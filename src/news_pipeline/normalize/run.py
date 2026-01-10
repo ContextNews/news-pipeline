@@ -42,7 +42,7 @@ def build_csvs(articles: list[NormalizedArticle]) -> tuple[str, str, str]:
     articles_buffer = io.StringIO()
     articles_writer = csv.writer(articles_buffer)
     articles_writer.writerow([
-        "id", "source", "title", "summary", "url", "published_at", "fetched_at",
+        "id", "source", "title", "summary", "url", "published_at", "ingested_at",
         "article_text", "article_text_clean", "article_text_processed",
         "ner_model", "normalized_at", "embedding", "embedding_model"
     ])
@@ -54,7 +54,7 @@ def build_csvs(articles: list[NormalizedArticle]) -> tuple[str, str, str]:
             article.summary,
             article.url,
             article.published_at.isoformat() if article.published_at else None,
-            article.fetched_at.isoformat() if article.fetched_at else None,
+            article.ingested_at.isoformat() if article.ingested_at else None,
             article.article_text,
             article.article_text_clean,
             article.article_text_processed,

@@ -28,7 +28,7 @@ class NormalizedArticle:
     summary: str
     url: str
     published_at: datetime
-    fetched_at: datetime
+    ingested_at: datetime
     article_text: Optional[str]
 
     # Added by normalization

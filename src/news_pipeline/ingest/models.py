@@ -19,12 +19,6 @@ class RSSArticle:
     published_at: datetime
 
 @dataclass
-class FetchedArticleText:
-    text: Optional[str]
-    method: Optional[str] = None
-    error: Optional[str] = None
-
-@dataclass
 class RawArticle:
     id: str
     source: str
@@ -32,5 +26,5 @@ class RawArticle:
     summary: str
     url: str
     published_at: datetime
-    fetched_at: datetime
-    article_text: FetchedArticleText
+    ingested_at: datetime
+    text: Optional[str]

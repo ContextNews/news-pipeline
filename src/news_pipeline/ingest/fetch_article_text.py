@@ -6,11 +6,10 @@ import trafilatura
 from readability import Document
 from lxml import html as lxml_html
 
-from news_pipeline.ingest.models import FetchedArticleText
-
 logger = logging.getLogger(__name__)
 
-def fetch_article_text(url: str) -> FetchedArticleText:
+
+def fetch_article_text(url: str) -> Optional[str]:
     """
     Fetch full article text from URL.
 
@@ -18,14 +17,14 @@ def fetch_article_text(url: str) -> FetchedArticleText:
     1. trafilatura
     2. readability-lxml
 
-    Each tried once. If both fail → failure.
+    Each tried once. If both fail → returns None.
     """
 
     # 1. Try trafilatura
     try:
         text = fetch_with_trafilatura(url)
         if text:
-            return FetchedArticleText(text=text, method="trafilatura")
+            return text
     except Exception as e:
         logger.warning(f"trafilatura failed for {url}: {e}")
 
@@ -33,17 +32,12 @@ def fetch_article_text(url: str) -> FetchedArticleText:
     try:
         text = fetch_with_readability(url)
         if text:
-            return FetchedArticleText(text=text, method="readability")
+            return text
     except Exception as e:
         logger.warning(f"readability failed for {url}: {e}")
-        return FetchedArticleText(text=None, method=None, error=str(e))
 
     # Both methods failed
-    return FetchedArticleText(
-        text=None,
-        method=None,
-        error="All extraction methods failed"
-    )
+    return None
 
 
 def fetch_with_trafilatura(url: str) -> Optional[str]:
