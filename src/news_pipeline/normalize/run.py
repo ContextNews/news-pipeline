@@ -95,7 +95,7 @@ def main():
     period = args.period or config.period or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     period_dt = datetime.strptime(period, "%Y-%m-%d")
 
-    bucket = os.environ["S3_BUCKET"]
+    bucket = os.environ["S3_BUCKET_NAME"]
     now = datetime.now(timezone.utc)
 
     # Read input articles from S3

@@ -46,8 +46,8 @@ def main():
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
         logger.info(f"Saved {len(articles)} articles to {filepath}")
     else:
-        bucket = os.environ["S3_BUCKET"]
-        key = build_s3_key("news-raw", now, f"raw_articles_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl")
+        bucket = os.environ["S3_BUCKET_NAME"]
+        key = build_s3_key("ingested_articles", now, f"raw_articles_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl")
         upload_jsonl_to_s3(records, bucket, key)
         logger.info(f"Uploaded {len(articles)} articles to s3://{bucket}/{key}")
 

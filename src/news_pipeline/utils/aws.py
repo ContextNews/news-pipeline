@@ -11,8 +11,8 @@ load_dotenv()
 
 
 def get_s3_client():
-    """Create S3 client, using S3_ENDPOINT if set."""
-    return boto3.client("s3", endpoint_url=os.environ.get("S3_ENDPOINT"))
+    """Create S3 client."""
+    return boto3.client("s3")
 
 
 def build_s3_key(prefix: str, timestamp: datetime, filename: str) -> str:
