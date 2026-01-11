@@ -13,6 +13,7 @@ from news_pipeline.utils.aws import (
     read_jsonl_from_s3,
     upload_jsonl_to_s3,
 )
+from news_pipeline.utils.datetime import parse_datetime
 from news_pipeline.utils.serialization import serialize_dataclass
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -59,8 +60,8 @@ def embed_articles(
             title=article.get("title", ""),
             summary=article.get("summary", ""),
             url=article["url"],
-            published_at=_parse_datetime(article.get("published_at")),
-            ingested_at=_parse_datetime(article.get("ingested_at")),
+            published_at=parse_datetime(article.get("published_at")),
+            ingested_at=parse_datetime(article.get("ingested_at")),
             text=article.get("text"),
             embedded_text=prepared_texts[i],
             embedding=embeddings[i],
@@ -69,15 +70,6 @@ def embed_articles(
 
     logger.info(f"Embedded {len(results)} articles")
     return results
-
-
-def _parse_datetime(value) -> datetime:
-    """Parse datetime from ISO string or return as-is if already datetime."""
-    if value is None:
-        return datetime.now(timezone.utc)
-    if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def main():

@@ -13,6 +13,7 @@ from news_pipeline.utils.aws import (
     read_jsonl_from_s3,
     upload_jsonl_to_s3,
 )
+from news_pipeline.utils.datetime import parse_datetime
 from news_pipeline.utils.serialization import serialize_dataclass
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -35,22 +36,13 @@ def clean_articles(raw_articles: list[dict]) -> list[CleanedArticle]:
             title=clean_text(raw.get("title")) or "",
             summary=clean_text(raw.get("summary")) or "",
             url=raw["url"],
-            published_at=_parse_datetime(raw.get("published_at")),
-            ingested_at=_parse_datetime(raw.get("ingested_at")),
+            published_at=parse_datetime(raw.get("published_at")),
+            ingested_at=parse_datetime(raw.get("ingested_at")),
             text=clean_text(raw.get("text")),
         ))
 
     logger.info(f"Cleaned {len(results)} articles")
     return results
-
-
-def _parse_datetime(value) -> datetime:
-    """Parse datetime from ISO string or return as-is if already datetime."""
-    if value is None:
-        return datetime.now(timezone.utc)
-    if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def main():
