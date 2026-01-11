@@ -57,6 +57,10 @@ hdbscan = ">=0.8.33"
 numpy = ">=1.26"
 pyarrow = ">=18.0"
 
+# Load service dependencies
+[tool.poetry.group.load.dependencies]
+context-data-schema = {git = "https://github.com/ContextNews/context-data-schemas.git", branch = "main"}
+
 # API service dependencies
 [tool.poetry.group.api.dependencies]
 fastapi = ">=0.115"
