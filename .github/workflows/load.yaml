@@ -22,11 +22,40 @@ jobs:
 
       - name: Set up SSH tunnel
         run: |
+          # Validate secrets are present
+          if [ -z "${{ secrets.BASTION_IP }}" ]; then
+            echo "::warning::BASTION_IP secret is empty!"
+          fi
+          if [ -z "${{ secrets.BASTION_SSH_KEY }}" ]; then
+            echo "::warning::BASTION_SSH_KEY secret is empty!"
+          fi
+          if [ -z "${{ secrets.RDS_ENDPOINT }}" ]; then
+            echo "::warning::RDS_ENDPOINT secret is empty!"
+          fi
+
           mkdir -p ~/.ssh
           echo "${{ secrets.BASTION_SSH_KEY }}" > ~/.ssh/bastion_key
           chmod 600 ~/.ssh/bastion_key
-          ssh-keyscan -H ${{ secrets.BASTION_IP }} >> ~/.ssh/known_hosts
+
+          # Verbose ssh-keyscan to debug connectivity
+          echo "Running ssh-keyscan..."
+          ssh-keyscan -v -H ${{ secrets.BASTION_IP }} >> ~/.ssh/known_hosts 2>&1
+
+          # Test connection in foreground first
+          echo "Testing SSH connection..."
+          ssh -i ~/.ssh/bastion_key \
+            -o ConnectTimeout=10 \
+            -o BatchMode=yes \
+            -v \
+            ec2-user@${{ secrets.BASTION_IP }} "echo 'Connection Successful'"
+
+          # Set up background tunnel with verbose output
+          echo "Setting up SSH tunnel..."
           ssh -f -N -L 5432:${{ secrets.RDS_ENDPOINT }}:5432 \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=60 \
+            -v \
             -i ~/.ssh/bastion_key \
             ec2-user@${{ secrets.BASTION_IP }}
 
