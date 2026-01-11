@@ -1,0 +1,60 @@
+name: Load
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Set up SSH tunnel
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BASTION_SSH_KEY }}" > ~/.ssh/bastion_key
+          chmod 600 ~/.ssh/bastion_key
+          ssh-keyscan -H ${{ secrets.BASTION_IP }} >> ~/.ssh/known_hosts
+          ssh -f -N -L 5432:${{ secrets.RDS_ENDPOINT }}:5432 \
+            -i ~/.ssh/bastion_key \
+            ec2-user@${{ secrets.BASTION_IP }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-load-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --with load
+
+      - name: Run load
+        env:
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD }}@localhost:5432/contextdb
+        run: poetry run python -m news_pipeline.stage5_load.run
