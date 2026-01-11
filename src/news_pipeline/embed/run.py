@@ -5,71 +5,17 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from news_pipeline.embed.embed import prepare_text, compute_embeddings_batch
-from news_pipeline.embed.models import EmbeddedArticle
+from news_pipeline.embed.embed import embed, DEFAULT_MODEL, DEFAULT_BATCH_SIZE
 from news_pipeline.utils.aws import (
     build_s3_key,
     list_s3_jsonl_files,
     read_jsonl_from_s3,
     upload_jsonl_to_s3,
 )
-from news_pipeline.utils.datetime import parse_datetime
 from news_pipeline.utils.serialization import serialize_dataclass
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-DEFAULT_MODEL = "mpnet"
-DEFAULT_BATCH_SIZE = 32
-DEFAULT_MAX_ARTICLE_WORDS = 250
-
-
-def embed_articles(
-    cleaned_articles: list[dict],
-    model_key: str = DEFAULT_MODEL,
-    batch_size: int = DEFAULT_BATCH_SIZE,
-    max_article_words: int = DEFAULT_MAX_ARTICLE_WORDS,
-) -> list[EmbeddedArticle]:
-    """Embed cleaned articles."""
-    if not cleaned_articles:
-        logger.warning("No articles to embed")
-        return []
-
-    logger.info(f"Embedding {len(cleaned_articles)} articles")
-
-    # Prepare texts for embedding
-    prepared_texts = [
-        prepare_text(
-            title=article.get("title"),
-            summary=article.get("summary"),
-            article_text=article.get("text"),
-            max_article_words=max_article_words,
-        )
-        for article in cleaned_articles
-    ]
-
-    # Compute embeddings
-    embeddings = compute_embeddings_batch(prepared_texts, model_key=model_key, batch_size=batch_size)
-
-    # Build embedded articles
-    results = []
-    for i, article in enumerate(cleaned_articles):
-        results.append(EmbeddedArticle(
-            id=article["id"],
-            source=article["source"],
-            title=article.get("title", ""),
-            summary=article.get("summary", ""),
-            url=article["url"],
-            published_at=parse_datetime(article.get("published_at")),
-            ingested_at=parse_datetime(article.get("ingested_at")),
-            text=article.get("text"),
-            embedded_text=prepared_texts[i],
-            embedding=embeddings[i],
-            embedding_model=model_key,
-        ))
-
-    logger.info(f"Embedded {len(results)} articles")
-    return results
 
 
 def main():
@@ -107,7 +53,7 @@ def main():
     logger.info(f"Loaded {len(cleaned_articles)} articles")
 
     # Embed articles
-    embedded = embed_articles(cleaned_articles, model_key=args.model, batch_size=args.batch_size)
+    embedded = embed(cleaned_articles, model_key=args.model, batch_size=args.batch_size)
 
     if not embedded:
         logger.warning("No articles embedded")

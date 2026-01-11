@@ -1,7 +1,10 @@
-"""Text embedding using sentence-transformers."""
+"""Core embed logic."""
 
 import logging
 from typing import Optional
+
+from news_pipeline.embed.models import EmbeddedArticle
+from news_pipeline.utils.datetime import parse_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +12,10 @@ EMBEDDING_MODELS = {
     "minilm": {"name": "all-MiniLM-L6-v2", "dim": 384, "max_tokens": 256},
     "mpnet": {"name": "all-mpnet-base-v2", "dim": 768, "max_tokens": 384},
 }
+
+DEFAULT_MODEL = "mpnet"
+DEFAULT_BATCH_SIZE = 32
+DEFAULT_MAX_ARTICLE_WORDS = 250
 
 _model_cache: dict = {}
 
@@ -27,7 +34,7 @@ def _get_model(model_key: str):
     return _model_cache[model_key]
 
 
-def prepare_text(
+def _prepare_text(
     title: Optional[str],
     summary: Optional[str],
     article_text: Optional[str],
@@ -66,7 +73,7 @@ def prepare_text(
     return "\n\n".join(parts)
 
 
-def compute_embeddings_batch(
+def _compute_embeddings_batch(
     texts: list[Optional[str]],
     model_key: str = "minilm",
     batch_size: int = 32,
@@ -100,4 +107,52 @@ def compute_embeddings_batch(
     for idx, emb in zip(valid_indices, embeddings):
         results[idx] = emb.tolist()
 
+    return results
+
+
+def embed(
+    cleaned_articles: list[dict],
+    model_key: str = DEFAULT_MODEL,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    max_article_words: int = DEFAULT_MAX_ARTICLE_WORDS,
+) -> list[EmbeddedArticle]:
+    """Embed cleaned articles."""
+    if not cleaned_articles:
+        logger.warning("No articles to embed")
+        return []
+
+    logger.info(f"Embedding {len(cleaned_articles)} articles")
+
+    # Prepare texts for embedding
+    prepared_texts = [
+        _prepare_text(
+            title=article.get("title"),
+            summary=article.get("summary"),
+            article_text=article.get("text"),
+            max_article_words=max_article_words,
+        )
+        for article in cleaned_articles
+    ]
+
+    # Compute embeddings
+    embeddings = _compute_embeddings_batch(prepared_texts, model_key=model_key, batch_size=batch_size)
+
+    # Build embedded articles
+    results = []
+    for i, article in enumerate(cleaned_articles):
+        results.append(EmbeddedArticle(
+            id=article["id"],
+            source=article["source"],
+            title=article.get("title", ""),
+            summary=article.get("summary", ""),
+            url=article["url"],
+            published_at=parse_datetime(article.get("published_at")),
+            ingested_at=parse_datetime(article.get("ingested_at")),
+            text=article.get("text"),
+            embedded_text=prepared_texts[i],
+            embedding=embeddings[i],
+            embedding_model=model_key,
+        ))
+
+    logger.info(f"Embedded {len(results)} articles")
     return results
