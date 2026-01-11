@@ -46,4 +46,4 @@ jobs:
       - name: Run ingestion
         env:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-        run: poetry run python -m news_pipeline.ingest.run prod
+        run: poetry run python -m news_pipeline.stage1_ingest.run prod

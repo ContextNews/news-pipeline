@@ -5,7 +5,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from news_pipeline.clean.clean import clean
+from news_pipeline.stage2_clean.clean import clean
 from news_pipeline.utils.aws import (
     build_s3_key,
     list_s3_jsonl_files,

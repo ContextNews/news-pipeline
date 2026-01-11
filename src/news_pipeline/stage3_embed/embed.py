@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from news_pipeline.embed.models import EmbeddedArticle
+from news_pipeline.stage3_embed.models import EmbeddedArticle
 from news_pipeline.utils.datetime import parse_datetime
 
 logger = logging.getLogger(__name__)

@@ -4,8 +4,8 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, Mock
 
-from news_pipeline.ingest.ingest import ingest
-from news_pipeline.ingest.models import RSSArticle, RawArticle, FetchedArticleText
+from news_pipeline.stage1_ingest.ingest import ingest
+from news_pipeline.stage1_ingest.models import RSSArticle, RawArticle, FetchedArticleText
 
 
 @pytest.fixture
@@ -27,8 +27,8 @@ def mock_article_text():
 class TestIngest:
     """Tests for the main ingest function."""
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_returns_raw_articles(self, mock_fetch_rss, mock_fetch_text, mock_rss_article, mock_article_text):
         mock_fetch_rss.return_value = [mock_rss_article]
         mock_fetch_text.return_value = mock_article_text
@@ -40,8 +40,8 @@ class TestIngest:
         assert result[0].title == "Test Article"
         assert result[0].source == "bbc"
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_generates_article_id(self, mock_fetch_rss, mock_fetch_text, mock_rss_article, mock_article_text):
         mock_fetch_rss.return_value = [mock_rss_article]
         mock_fetch_text.return_value = mock_article_text
@@ -51,8 +51,8 @@ class TestIngest:
         assert result[0].id is not None
         assert len(result[0].id) == 16  # SHA256 truncated to 16 chars
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_fetches_article_text_when_enabled(self, mock_fetch_rss, mock_fetch_text, mock_rss_article, mock_article_text):
         mock_fetch_rss.return_value = [mock_rss_article]
         mock_fetch_text.return_value = mock_article_text
@@ -62,8 +62,8 @@ class TestIngest:
         mock_fetch_text.assert_called_once_with(mock_rss_article.url)
         assert result[0].article_text.text == "Full article text"
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_skips_article_text_when_disabled(self, mock_fetch_rss, mock_fetch_text, mock_rss_article):
         mock_fetch_rss.return_value = [mock_rss_article]
 
@@ -72,8 +72,8 @@ class TestIngest:
         mock_fetch_text.assert_not_called()
         assert result[0].article_text.text is None
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_processes_multiple_sources(self, mock_fetch_rss, mock_fetch_text, mock_article_text):
         bbc_article = RSSArticle(
             source="bbc", title="BBC Article", summary="", url="https://bbc.com/1",
@@ -92,7 +92,7 @@ class TestIngest:
         assert result[0].source == "bbc"
         assert result[1].source == "cnn"
 
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_continues_on_source_error(self, mock_fetch_rss, mock_rss_article):
         mock_fetch_rss.side_effect = [Exception("Network error"), [mock_rss_article]]
 
@@ -103,7 +103,7 @@ class TestIngest:
         assert len(result) == 1
         assert result[0].source == "bbc"
 
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_returns_empty_list_when_no_articles(self, mock_fetch_rss):
         mock_fetch_rss.return_value = []
 
@@ -111,8 +111,8 @@ class TestIngest:
 
         assert result == []
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_sets_fetched_at_timestamp(self, mock_fetch_rss, mock_fetch_text, mock_rss_article, mock_article_text):
         mock_fetch_rss.return_value = [mock_rss_article]
         mock_fetch_text.return_value = mock_article_text
@@ -123,8 +123,8 @@ class TestIngest:
 
         assert before <= result[0].fetched_at <= after
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_lookback_hours_default(self, mock_fetch_rss, mock_fetch_text):
         mock_fetch_rss.return_value = []
 
@@ -136,8 +136,8 @@ class TestIngest:
         expected = datetime.now(timezone.utc) - timedelta(hours=24)
         assert abs((since - expected).total_seconds()) < 5
 
-    @patch("news_pipeline.ingest.ingest.fetch_text")
-    @patch("news_pipeline.ingest.ingest.fetch_rss_articles")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
+    @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
     def test_custom_lookback_hours(self, mock_fetch_rss, mock_fetch_text):
         mock_fetch_rss.return_value = []
 

@@ -9,8 +9,8 @@ from pathlib import Path
 
 import yaml
 
-from news_pipeline.ingest.ingest import ingest
-from news_pipeline.ingest.models import IngestConfig
+from news_pipeline.stage1_ingest.ingest import ingest
+from news_pipeline.stage1_ingest.models import IngestConfig
 from news_pipeline.utils.aws import build_s3_key, upload_jsonl_to_s3
 from news_pipeline.utils.serialization import serialize_dataclass
 

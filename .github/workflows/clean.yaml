@@ -46,4 +46,4 @@ jobs:
       - name: Run clean
         env:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-        run: poetry run python -m news_pipeline.clean.run
+        run: poetry run python -m news_pipeline.stage2_clean.run

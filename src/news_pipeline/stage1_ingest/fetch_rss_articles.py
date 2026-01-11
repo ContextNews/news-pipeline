@@ -8,8 +8,8 @@ import feedparser
 import requests
 from dateutil.parser import parse as parse_date
 
-from news_pipeline.ingest.sources import RSS_FEEDS
-from news_pipeline.ingest.models import RSSArticle
+from news_pipeline.stage1_ingest.sources import RSS_FEEDS
+from news_pipeline.stage1_ingest.models import RSSArticle
 
 logger = logging.getLogger(__name__)
 

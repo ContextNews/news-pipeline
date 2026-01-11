@@ -3,9 +3,9 @@
 import logging
 from datetime import datetime, timezone, timedelta
 
-from news_pipeline.ingest.fetch_rss_articles import fetch_rss_articles
-from news_pipeline.ingest.fetch_article_text import fetch_article_text as fetch_text
-from news_pipeline.ingest.models import RawArticle
+from news_pipeline.stage1_ingest.fetch_rss_articles import fetch_rss_articles
+from news_pipeline.stage1_ingest.fetch_article_text import fetch_article_text as fetch_text
+from news_pipeline.stage1_ingest.models import RawArticle
 from news_pipeline.utils.hashing import generate_article_id
 
 logger = logging.getLogger(__name__)

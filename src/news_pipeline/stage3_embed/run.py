@@ -5,7 +5,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from news_pipeline.embed.embed import embed, DEFAULT_MODEL, DEFAULT_BATCH_SIZE
+from news_pipeline.stage3_embed.embed import embed, DEFAULT_MODEL, DEFAULT_BATCH_SIZE
 from news_pipeline.utils.aws import (
     build_s3_key,
     list_s3_jsonl_files,

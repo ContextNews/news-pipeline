@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, Mock
 
-from news_pipeline.ingest.fetch_article_text import (
+from news_pipeline.stage1_ingest.fetch_article_text import (
     fetch_article_text,
     fetch_with_trafilatura,
     fetch_with_readability,
@@ -13,7 +13,7 @@ from news_pipeline.ingest.fetch_article_text import (
 class TestFetchArticleText:
     """Tests for the main fetch_article_text function."""
 
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_trafilatura")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
     def test_returns_trafilatura_result_when_successful(self, mock_trafilatura):
         mock_trafilatura.return_value = "Article content from trafilatura"
 
@@ -23,8 +23,8 @@ class TestFetchArticleText:
         assert result.method == "trafilatura"
         assert result.error is None
 
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_readability")
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_trafilatura")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
     def test_falls_back_to_readability_when_trafilatura_returns_none(
         self, mock_trafilatura, mock_readability
     ):
@@ -37,8 +37,8 @@ class TestFetchArticleText:
         assert result.method == "readability"
         assert result.error is None
 
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_readability")
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_trafilatura")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
     def test_falls_back_to_readability_when_trafilatura_raises(
         self, mock_trafilatura, mock_readability
     ):
@@ -50,8 +50,8 @@ class TestFetchArticleText:
         assert result.text == "Article content from readability"
         assert result.method == "readability"
 
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_readability")
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_trafilatura")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
     def test_returns_error_when_both_methods_fail(
         self, mock_trafilatura, mock_readability
     ):
@@ -64,8 +64,8 @@ class TestFetchArticleText:
         assert result.method is None
         assert result.error == "All extraction methods failed"
 
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_readability")
-    @patch("news_pipeline.ingest.fetch_article_text.fetch_with_trafilatura")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
     def test_returns_error_when_readability_raises(
         self, mock_trafilatura, mock_readability
     ):
@@ -81,7 +81,7 @@ class TestFetchArticleText:
 class TestFetchWithTrafilatura:
     """Tests for fetch_with_trafilatura function."""
 
-    @patch("news_pipeline.ingest.fetch_article_text.trafilatura")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.trafilatura")
     def test_returns_extracted_text(self, mock_trafilatura):
         mock_trafilatura.fetch_url.return_value = "<html>content</html>"
         mock_trafilatura.extract.return_value = "Extracted text"
@@ -91,7 +91,7 @@ class TestFetchWithTrafilatura:
         assert result == "Extracted text"
         mock_trafilatura.fetch_url.assert_called_once_with("https://example.com/article")
 
-    @patch("news_pipeline.ingest.fetch_article_text.trafilatura")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.trafilatura")
     def test_returns_none_when_fetch_fails(self, mock_trafilatura):
         mock_trafilatura.fetch_url.return_value = None
 
@@ -103,7 +103,7 @@ class TestFetchWithTrafilatura:
 class TestFetchWithReadability:
     """Tests for fetch_with_readability function."""
 
-    @patch("news_pipeline.ingest.fetch_article_text.requests")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.requests")
     def test_returns_extracted_text(self, mock_requests):
         mock_response = Mock()
         mock_response.text = """
@@ -124,7 +124,7 @@ class TestFetchWithReadability:
         assert result is not None
         mock_requests.get.assert_called_once_with("https://example.com/article", timeout=10)
 
-    @patch("news_pipeline.ingest.fetch_article_text.requests")
+    @patch("news_pipeline.stage1_ingest.fetch_article_text.requests")
     def test_raises_on_http_error(self, mock_requests):
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = Exception("404 Not Found")

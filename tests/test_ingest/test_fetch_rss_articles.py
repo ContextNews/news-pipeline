@@ -4,20 +4,20 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, Mock
 
-from news_pipeline.ingest.fetch_rss_articles import (
+from news_pipeline.stage1_ingest.fetch_rss_articles import (
     fetch_rss_articles,
     _fetch_feed,
     _parse_entry,
     _parse_published_date,
 )
-from news_pipeline.ingest.models import RSSArticle
+from news_pipeline.stage1_ingest.models import RSSArticle
 
 
 class TestFetchRssArticles:
     """Tests for the main fetch_rss_articles function."""
 
-    @patch("news_pipeline.ingest.fetch_rss_articles.RSS_FEEDS", {"bbc": "https://bbc.com/rss"})
-    @patch("news_pipeline.ingest.fetch_rss_articles._fetch_feed")
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles.RSS_FEEDS", {"bbc": "https://bbc.com/rss"})
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles._fetch_feed")
     def test_fetches_from_known_source(self, mock_fetch_feed):
         since = datetime(2024, 1, 1, tzinfo=timezone.utc)
         mock_article = RSSArticle(
@@ -35,7 +35,7 @@ class TestFetchRssArticles:
         assert result[0].title == "Test Article"
         mock_fetch_feed.assert_called_once()
 
-    @patch("news_pipeline.ingest.fetch_rss_articles.RSS_FEEDS", {})
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles.RSS_FEEDS", {})
     def test_returns_empty_for_unknown_source(self):
         since = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
@@ -43,8 +43,8 @@ class TestFetchRssArticles:
 
         assert result == []
 
-    @patch("news_pipeline.ingest.fetch_rss_articles.RSS_FEEDS", {"bbc": "https://bbc.com/rss"})
-    @patch("news_pipeline.ingest.fetch_rss_articles._fetch_feed")
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles.RSS_FEEDS", {"bbc": "https://bbc.com/rss"})
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles._fetch_feed")
     def test_adds_utc_timezone_to_naive_datetime(self, mock_fetch_feed):
         since = datetime(2024, 1, 1)  # naive datetime
         mock_fetch_feed.return_value = []
@@ -58,8 +58,8 @@ class TestFetchRssArticles:
 class TestFetchFeed:
     """Tests for _fetch_feed function."""
 
-    @patch("news_pipeline.ingest.fetch_rss_articles.feedparser")
-    @patch("news_pipeline.ingest.fetch_rss_articles.requests")
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles.feedparser")
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles.requests")
     def test_parses_feed_entries(self, mock_requests, mock_feedparser):
         mock_response = Mock()
         mock_response.content = b"<rss>...</rss>"
@@ -82,7 +82,7 @@ class TestFetchFeed:
         assert len(result) == 1
         assert result[0].title == "Article 1"
 
-    @patch("news_pipeline.ingest.fetch_rss_articles.requests")
+    @patch("news_pipeline.stage1_ingest.fetch_rss_articles.requests")
     def test_sets_user_agent_header(self, mock_requests):
         mock_response = Mock()
         mock_response.content = b"<rss></rss>"

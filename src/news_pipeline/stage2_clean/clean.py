@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Optional
 
-from news_pipeline.clean.models import CleanedArticle
+from news_pipeline.stage2_clean.models import CleanedArticle
 from news_pipeline.utils.datetime import parse_datetime
 
 logger = logging.getLogger(__name__)

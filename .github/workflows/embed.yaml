@@ -57,4 +57,4 @@ jobs:
       - name: Run embed
         env:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-        run: poetry run python -m news_pipeline.embed.run
+        run: poetry run python -m news_pipeline.stage3_embed.run
