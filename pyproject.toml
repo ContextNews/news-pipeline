@@ -35,6 +35,11 @@ readability-lxml = ">=0.8,<1.0"
 sentence-transformers = ">=2.2"
 numpy = ">=1.26"
 
+# Extract service dependencies
+[tool.poetry.group.extract.dependencies]
+spacy = ">=3.7"
+spacy-transformers = ">=1.3"
+
 # Normalize service dependencies
 [tool.poetry.group.normalize.dependencies]
 spacy = ">=3.7"

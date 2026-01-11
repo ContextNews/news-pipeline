@@ -17,3 +17,8 @@ jobs:
     needs: clean
     uses: ./.github/workflows/embed.yaml
     secrets: inherit
+
+  extract:
+    needs: embed
+    uses: ./.github/workflows/extract.yaml
+    secrets: inherit
