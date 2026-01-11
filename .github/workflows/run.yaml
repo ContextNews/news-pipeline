@@ -1,9 +1,6 @@
 name: Run Pipeline
 
 on:
-  schedule:
-    # Run every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
-    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -14,4 +11,9 @@ jobs:
   clean:
     needs: ingest
     uses: ./.github/workflows/clean.yaml
+    secrets: inherit
+
+  embed:
+    needs: clean
+    uses: ./.github/workflows/embed.yaml
     secrets: inherit

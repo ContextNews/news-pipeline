@@ -30,6 +30,11 @@ python-dateutil = ">=2.9,<3.0"
 trafilatura = ">=2.0,<3.0"
 readability-lxml = ">=0.8,<1.0"
 
+# Embed service dependencies
+[tool.poetry.group.embed.dependencies]
+sentence-transformers = ">=2.2"
+numpy = ">=1.26"
+
 # Normalize service dependencies
 [tool.poetry.group.normalize.dependencies]
 spacy = ">=3.7"

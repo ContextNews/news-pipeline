@@ -11,6 +11,7 @@ on:
           - all
           - ingested
           - cleaned
+          - embedded
         default: 'all'
       confirm:
         description: 'Type "RESET" to confirm deletion'
@@ -74,6 +75,33 @@ jobs:
           client = boto3.client('s3')
           bucket = os.environ['S3_BUCKET_NAME']
           prefix = 'cleaned_articles/'
+
+          paginator = client.get_paginator('list_objects_v2')
+          deleted = 0
+
+          for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+              if 'Contents' not in page:
+                  continue
+              objects = [{'Key': obj['Key']} for obj in page['Contents']]
+              if objects:
+                  client.delete_objects(Bucket=bucket, Delete={'Objects': objects})
+                  deleted += len(objects)
+
+          print(f'Deleted {deleted} objects from s3://{bucket}/{prefix}')
+          "
+
+      - name: Clear embedded data (S3)
+        if: ${{ inputs.target == 'all' || inputs.target == 'embedded' }}
+        env:
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          python -c "
+          import os
+          import boto3
+
+          client = boto3.client('s3')
+          bucket = os.environ['S3_BUCKET_NAME']
+          prefix = 'embedded_articles/'
 
           paginator = client.get_paginator('list_objects_v2')
           deleted = 0
