@@ -5,44 +5,17 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from news_pipeline.clean.clean import clean_text
-from news_pipeline.clean.models import CleanedArticle
+from news_pipeline.clean.clean import clean
 from news_pipeline.utils.aws import (
     build_s3_key,
     list_s3_jsonl_files,
     read_jsonl_from_s3,
     upload_jsonl_to_s3,
 )
-from news_pipeline.utils.datetime import parse_datetime
 from news_pipeline.utils.serialization import serialize_dataclass
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-
-def clean_articles(raw_articles: list[dict]) -> list[CleanedArticle]:
-    """Clean raw articles: title, summary, and text."""
-    if not raw_articles:
-        logger.warning("No articles to clean")
-        return []
-
-    logger.info(f"Cleaning {len(raw_articles)} articles")
-
-    results = []
-    for raw in raw_articles:
-        results.append(CleanedArticle(
-            id=raw["id"],
-            source=raw["source"],
-            title=clean_text(raw.get("title")) or "",
-            summary=clean_text(raw.get("summary")) or "",
-            url=raw["url"],
-            published_at=parse_datetime(raw.get("published_at")),
-            ingested_at=parse_datetime(raw.get("ingested_at")),
-            text=clean_text(raw.get("text")),
-        ))
-
-    logger.info(f"Cleaned {len(results)} articles")
-    return results
 
 
 def main():
@@ -78,7 +51,7 @@ def main():
     logger.info(f"Loaded {len(raw_articles)} articles")
 
     # Clean articles
-    cleaned = clean_articles(raw_articles)
+    cleaned = clean(raw_articles)
 
     if not cleaned:
         logger.warning("No articles cleaned")
