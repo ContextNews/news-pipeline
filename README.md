@@ -1,72 +1,67 @@
-# news-pipeline
+# News Pipeline
 
-A modular, batch-oriented news processing pipeline that ingests raw articles, enriches them with NLP and embeddings, clusters them into stories, and exposes the results via an API.
+A modular, batch-oriented news processing pipeline that ingests articles from RSS feeds, enriches them with NLP processing (cleaning, embeddings, entity extraction), and loads them into PostgreSQL for downstream analysis and serving.
 
-The pipeline is designed for correctness, re-runnability, and transparency over raw speed. Each stage is isolated, deterministic, and produces explicit, versioned outputs suitable for downstream analysis and serving.
-
-## Repository Layout
-
-- `services/news-ingest` – RSS fetch + content resolution to JSONL
-- `services/news-normalize` – entity/locations, embeddings, Parquet output
-- `services/news-cluster` – clustering and story aggregation
-- `services/news-contextualize` – (planned) enrichment stage
-- `services/news-api` – read-only API over clustered data
+The pipeline is designed for correctness, re-runnability, and transparency. Each stage is isolated, deterministic, and produces explicit, versioned outputs stored in S3.
 
 ## How It Works
 
-Overview
+The pipeline consists of five sequential stages, each reading from the previous stage's S3 output:
 
-1. Ingest – fetch raw articles from RSS feeds and store them immutably
-2. Normalize – clean text, extract entities, resolve locations, generate embeddings
-3. Cluster – group related articles into stories using semantic similarity
-4. Contextualize – (planned) enrich stories with data, generate titles/summaries
-5. Serve – expose articles and stories via a read-only API
+### Stage 1: Ingest
+
+Fetches articles from 28+ RSS feeds (BBC, CNN, Guardian, NPR, Reuters, etc.) and extracts full article text.
+
+- Parses RSS entries for metadata (title, summary, URL, published date)
+- Extracts full article text using Trafilatura with Readability fallback
+- Generates deterministic article IDs from source + URL hash
+- Outputs to `s3://bucket/ingested_articles/year=YYYY/month=MM/day=DD/`
+
+### Stage 2: Clean
+
+Cleans and normalizes text from raw articles.
+
+- Strips HTML tags and fixes escaped characters
+- Collapses whitespace and normalizes formatting
+- Validates and parses datetime fields
+- Outputs to `s3://bucket/cleaned_articles/year=YYYY/month=MM/day=DD/`
+
+### Stage 3: Embed
+
+Generates semantic embeddings for similarity-based analysis.
+
+- Combines title + summary + article text (truncated to 250 words)
+- Uses SentenceTransformer model (all-mpnet-base-v2, 768 dimensions)
+- Processes in batches for efficiency
+- Outputs to `s3://bucket/embedded_articles/year=YYYY/month=MM/day=DD/`
+
+### Stage 4: Extract
+
+Extracts named entities using spaCy transformer models.
+
+- Identifies PERSON, ORG, GPE (geopolitical), and LOC (location) entities
+- Uses en_core_web_trf model for highest accuracy
+- Deduplicates entities per article
+- Outputs to `s3://bucket/extracted_articles/year=YYYY/month=MM/day=DD/`
+
+### Stage 5: Load
+
+Loads processed articles and entities into PostgreSQL.
+
+- Upserts articles (updates on ID conflict)
+- Inserts unique entities (type + name composite key)
+- Creates article-entity relationships
+- All operations are idempotent for safe re-runs
 
 ## GitHub Actions
 
-| Action    | YAML file        | Schedule                                |
-| --------- | ---------------- | --------------------------------------- |
-| Ingest    | `ingest.yaml`    | Scheduled – every 6 hours               |
-| Normalize | `normalize.yaml` | Manual (workflow dispatch)              |
-| Cluster   | `cluster.yaml`   | Manual (workflow dispatch)              |
-| Reset     | `reset.yaml`     | Manual (workflow dispatch, destructive) |
+| Action  | Workflow       | Trigger                    | Description                          |
+| ------- | -------------- | -------------------------- | ------------------------------------ |
+| Ingest  | `ingest.yaml`  | Manual / Callable          | Fetch articles from RSS feeds        |
+| Clean   | `clean.yaml`   | Manual / Callable          | Clean and normalize article text     |
+| Embed   | `embed.yaml`   | Manual / Callable          | Generate semantic embeddings         |
+| Extract | `extract.yaml` | Manual / Callable          | Extract named entities               |
+| Run     | `run.yaml`     | Manual                     | Run full pipeline (all stages)       |
+| Reset   | `reset.yaml`   | Manual (requires `RESET`)  | Delete S3 data for re-processing     |
 
-
-## Architecture
-
-```mermaid
-flowchart TD
-    RSS[RSS Feeds]
-
-    INGEST[news-ingest]
-    RAW[(S3<br/>Raw JSONL)]
-
-    NORMALIZE[news-normalize]
-    NORM[(S3<br/>Parquet Dataset)]
-
-    CLUSTER[news-cluster]
-    RDS[(Amazon RDS<br/>Stories)]
-
-    API[news-api]
-
-    RSS --> INGEST
-    INGEST -->|write JSONL| RAW
-
-    RAW -->|read JSONL| NORMALIZE
-    NORMALIZE -->|write Parquet| NORM
-
-    NORM -->|read Parquet| CLUSTER
-    CLUSTER -->|write stories| RDS
-
-    RDS --> API
-```
-## Requirements
-
-- Python 3.12+
-- Poetry
-- AWS S3 (or compatible)
-- PostgreSQL (for ingest state tracking)
-
-## License
-
-MIT
+All workflows use AWS OIDC for authentication and cache dependencies/models between runs.
