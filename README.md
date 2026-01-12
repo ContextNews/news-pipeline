@@ -55,13 +55,14 @@ Loads processed articles and entities into PostgreSQL.
 
 ## GitHub Actions
 
-| Action  | Workflow       | Trigger                    | Description                          |
-| ------- | -------------- | -------------------------- | ------------------------------------ |
-| Ingest  | `ingest.yaml`  | Manual / Callable          | Fetch articles from RSS feeds        |
-| Clean   | `clean.yaml`   | Manual / Callable          | Clean and normalize article text     |
-| Embed   | `embed.yaml`   | Manual / Callable          | Generate semantic embeddings         |
-| Extract | `extract.yaml` | Manual / Callable          | Extract named entities               |
-| Run     | `run.yaml`     | Manual                     | Run full pipeline (all stages)       |
-| Reset   | `reset.yaml`   | Manual (requires `RESET`)  | Delete S3 data for re-processing     |
+| Action  | Workflow       | Description                          |
+| ------- | -------------- | ------------------------------------ |
+| Ingest  | `ingest.yaml`  | Fetch articles from RSS feeds        |
+| Clean   | `clean.yaml`   | Clean and normalize article text     |
+| Embed   | `embed.yaml`   | Generate semantic embeddings         |
+| Extract | `extract.yaml` | Extract named entities               |
+| Load    | `load.yaml`    | Load articles into PostgreSQL        |
+| Run     | `run.yaml`     | Run full pipeline (all stages)       |
+| Reset   | `reset.yaml`   | Delete S3 data for re-processing     |
 
 All workflows use AWS OIDC for authentication and cache dependencies/models between runs.
