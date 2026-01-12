@@ -3,6 +3,10 @@ name: Run Pipeline
 on:
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   ingest:
     uses: ./.github/workflows/ingest.yaml
