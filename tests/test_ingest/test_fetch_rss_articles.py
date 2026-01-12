@@ -88,7 +88,7 @@ class TestFetchFeed:
         mock_response.content = b"<rss></rss>"
         mock_requests.get.return_value = mock_response
 
-        with patch("news_pipeline.ingest.fetch_rss_articles.feedparser") as mock_fp:
+        with patch("news_pipeline.stage1_ingest.fetch_rss_articles.feedparser") as mock_fp:
             mock_fp.parse.return_value = Mock(entries=[])
             list(_fetch_feed("https://example.com/rss", "test", datetime.now(timezone.utc), set()))
 

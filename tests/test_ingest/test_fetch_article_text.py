@@ -19,9 +19,7 @@ class TestFetchArticleText:
 
         result = fetch_article_text("https://example.com/article")
 
-        assert result.text == "Article content from trafilatura"
-        assert result.method == "trafilatura"
-        assert result.error is None
+        assert result == "Article content from trafilatura"
 
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
@@ -33,9 +31,7 @@ class TestFetchArticleText:
 
         result = fetch_article_text("https://example.com/article")
 
-        assert result.text == "Article content from readability"
-        assert result.method == "readability"
-        assert result.error is None
+        assert result == "Article content from readability"
 
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
@@ -47,8 +43,7 @@ class TestFetchArticleText:
 
         result = fetch_article_text("https://example.com/article")
 
-        assert result.text == "Article content from readability"
-        assert result.method == "readability"
+        assert result == "Article content from readability"
 
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
@@ -60,9 +55,7 @@ class TestFetchArticleText:
 
         result = fetch_article_text("https://example.com/article")
 
-        assert result.text is None
-        assert result.method is None
-        assert result.error == "All extraction methods failed"
+        assert result is None
 
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_readability")
     @patch("news_pipeline.stage1_ingest.fetch_article_text.fetch_with_trafilatura")
@@ -74,8 +67,7 @@ class TestFetchArticleText:
 
         result = fetch_article_text("https://example.com/article")
 
-        assert result.text is None
-        assert result.error == "readability error"
+        assert result is None
 
 
 class TestFetchWithTrafilatura:

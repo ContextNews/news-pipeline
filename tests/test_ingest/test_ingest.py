@@ -2,10 +2,10 @@
 
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 from news_pipeline.stage1_ingest.ingest import ingest
-from news_pipeline.stage1_ingest.models import RSSArticle, RawArticle, FetchedArticleText
+from news_pipeline.stage1_ingest.models import RSSArticle, RawArticle
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def mock_rss_article():
 
 @pytest.fixture
 def mock_article_text():
-    return FetchedArticleText(text="Full article text", method="trafilatura")
+    return "Full article text"
 
 
 class TestIngest:
@@ -60,7 +60,7 @@ class TestIngest:
         result = ingest(["bbc"], fetch_article_text=True)
 
         mock_fetch_text.assert_called_once_with(mock_rss_article.url)
-        assert result[0].article_text.text == "Full article text"
+        assert result[0].text == "Full article text"
 
     @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
     @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
@@ -70,7 +70,7 @@ class TestIngest:
         result = ingest(["bbc"], fetch_article_text=False)
 
         mock_fetch_text.assert_not_called()
-        assert result[0].article_text.text is None
+        assert result[0].text is None
 
     @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
     @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
@@ -96,8 +96,8 @@ class TestIngest:
     def test_continues_on_source_error(self, mock_fetch_rss, mock_rss_article):
         mock_fetch_rss.side_effect = [Exception("Network error"), [mock_rss_article]]
 
-        with patch("news_pipeline.ingest.ingest.fetch_text") as mock_fetch_text:
-            mock_fetch_text.return_value = FetchedArticleText(text=None)
+        with patch("news_pipeline.stage1_ingest.ingest.fetch_text") as mock_fetch_text:
+            mock_fetch_text.return_value = None
             result = ingest(["failing-source", "bbc"], fetch_article_text=False)
 
         assert len(result) == 1
@@ -113,7 +113,7 @@ class TestIngest:
 
     @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
     @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
-    def test_sets_fetched_at_timestamp(self, mock_fetch_rss, mock_fetch_text, mock_rss_article, mock_article_text):
+    def test_sets_ingested_at_timestamp(self, mock_fetch_rss, mock_fetch_text, mock_rss_article, mock_article_text):
         mock_fetch_rss.return_value = [mock_rss_article]
         mock_fetch_text.return_value = mock_article_text
 
@@ -121,7 +121,7 @@ class TestIngest:
         result = ingest(["bbc"])
         after = datetime.now(timezone.utc)
 
-        assert before <= result[0].fetched_at <= after
+        assert before <= result[0].ingested_at <= after
 
     @patch("news_pipeline.stage1_ingest.ingest.fetch_text")
     @patch("news_pipeline.stage1_ingest.ingest.fetch_rss_articles")
