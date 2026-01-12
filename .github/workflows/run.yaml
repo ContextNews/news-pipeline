@@ -22,3 +22,8 @@ jobs:
     needs: embed
     uses: ./.github/workflows/extract.yaml
     secrets: inherit
+
+  load:
+    needs: extract
+    uses: ./.github/workflows/load.yaml
+    secrets: inherit
