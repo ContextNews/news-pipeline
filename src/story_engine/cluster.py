@@ -74,7 +74,7 @@ def _print_clusters(clusters: dict[int, list[dict[str, Any]]]) -> None:
         print(f"{header} ({len(articles)} articles)")
         for article in articles:
             title = article.get("title") or "(untitled)"
-            print(f"- {article.get('id')}: {title}")
+            print(f"- {article.get('id')} - {article.get('source')} : {title}")
         print()
 
 

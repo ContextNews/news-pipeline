@@ -1,21 +1,18 @@
-"""Fetch articles from the database for story clustering."""
+"""Fetch articles for story clustering."""
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
-
 from dotenv import load_dotenv
-
-from rds_postgres.connection import get_session
-from rds_postgres.models import Article
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
 
-def _article_to_dict(article: Article) -> dict[str, Any]:
+def _article_to_dict(article: Any) -> dict[str, Any]:
     embedding = article.embedding
     if embedding is not None and not isinstance(embedding, list):
         try:
@@ -38,11 +35,15 @@ def _article_to_dict(article: Article) -> dict[str, Any]:
     }
 
 
-def get_articles(limit: int | None = None, require_embedding: bool = True) -> list[dict[str, Any]]:
-    """Return articles from the database, optionally filtering to those with embeddings."""
+def _get_articles_from_rds(
+    limit: int | None = None,
+    require_embedding: bool = True,
+) -> list[dict[str, Any]]:
+    """Return articles from RDS, optionally filtering to those with embeddings."""
     load_dotenv()
 
-
+    from rds_postgres.connection import get_session
+    from rds_postgres.models import Article
 
     logger.info("Loading articles (limit=%s, require_embedding=%s)", limit, require_embedding)
     with get_session() as session:
@@ -52,7 +53,30 @@ def get_articles(limit: int | None = None, require_embedding: bool = True) -> li
         if limit:
             stmt = stmt.limit(limit)
         results = session.execute(stmt).scalars().all()
+        articles = [_article_to_dict(article) for article in results]
 
-    articles = [_article_to_dict(article) for article in results]
     logger.info("Loaded %d articles", len(articles))
     return articles
+
+
+def _get_articles_from_local(path: str | Path) -> list[dict[str, Any]]:
+    """Return articles from a local parquet file."""
+    import pyarrow.parquet as pq
+
+    path = Path(path)
+    logger.info("Loading articles from parquet: %s", path)
+    table = pq.read_table(path)
+    articles = table.to_pylist()
+    logger.info("Loaded %d articles", len(articles))
+    return articles
+
+
+def get_articles(
+    limit: int | None = None,
+    require_embedding: bool = True,
+    path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """Return articles from local parquet or RDS."""
+    if path:
+        return _get_articles_from_local(path)
+    return _get_articles_from_rds(limit=limit, require_embedding=require_embedding)
