@@ -100,6 +100,7 @@ jobs:
 
       - name: Run ingest_articles
         env:
+          PYTHONPATH: src
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           RDS_HOST: ${{ secrets.RDS_HOST }}
           RDS_PORT: ${{ secrets.RDS_PORT }}
