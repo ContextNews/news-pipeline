@@ -57,6 +57,22 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-west-2
 
+      - name: Set up SSH tunnel
+        if: inputs.load-rds
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BASTION_SSH_KEY }}" > ~/.ssh/bastion_key
+          chmod 600 ~/.ssh/bastion_key
+
+          ssh-keyscan -H ${{ secrets.BASTION_IP }} >> ~/.ssh/known_hosts 2>&1
+
+          ssh -f -N -L 5432:${{ secrets.RDS_ENDPOINT }}:5432 \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=60 \
+            -i ~/.ssh/bastion_key \
+            ec2-user@${{ secrets.BASTION_IP }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -102,7 +118,7 @@ jobs:
         env:
           PYTHONPATH: src
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD }}@localhost:5432/contextdb
         run: poetry run python -m ingest_articles ${{ steps.build-args.outputs.args }}
 
       - name: Upload local output
