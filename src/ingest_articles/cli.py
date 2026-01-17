@@ -13,8 +13,7 @@ from dotenv import load_dotenv
 
 from ingest_articles.ingest_articles import ingest_articles
 from ingest_articles.fetch_articles.sources import RSS_FEEDS
-from news_pipeline.stage5_load.load import load_articles
-from news_pipeline.utils.aws import build_s3_key, upload_jsonl_to_s3
+from news_pipeline.utils.aws import build_s3_key, upload_jsonl_to_s3, upload_articles
 from news_pipeline.utils.serialization import serialize_dataclass
 
 load_dotenv()
@@ -32,23 +31,6 @@ def _parse_sources(value: str | None) -> list[str]:
         if source:
             sources.append(source)
     return sources or list(RSS_FEEDS.keys())
-
-
-def _to_load_article_dict(article) -> dict:
-    return {
-        "id": article.id,
-        "source": article.source,
-        "title": article.title,
-        "summary": article.summary,
-        "url": article.url,
-        "published_at": article.published_at,
-        "ingested_at": article.ingested_at,
-        "text": article.text,
-        "embedded_text": None,
-        "embedding": None,
-        "embedding_model": None,
-        "entities": [],
-    }
 
 
 def main() -> None:
@@ -101,17 +83,9 @@ def main() -> None:
     if args.load_rds:
         from rds_postgres.connection import get_session
 
-        records = [_to_load_article_dict(article) for article in ingested_articles]
         with get_session() as session:
-            articles_loaded, entities_loaded, article_entities_loaded = load_articles(
-                records, session
-            )
-        logger.info(
-            "Loaded %d articles, %d new entities, %d new article-entity relationships",
-            articles_loaded,
-            entities_loaded,
-            article_entities_loaded,
-        )
+            articles_loaded = upload_articles(ingested_articles, session)
+        logger.info("Loaded %d articles to RDS", articles_loaded)
 
 
 if __name__ == "__main__":

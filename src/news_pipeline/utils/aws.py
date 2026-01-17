@@ -82,3 +82,55 @@ def read_jsonl_from_s3(bucket: str, key: str) -> Iterator[dict]:
         line = line.strip()
         if line:
             yield json.loads(line)
+
+
+def upload_articles(articles: list[Any], session: Any) -> int:
+    """
+    Upload articles to RDS PostgreSQL.
+
+    Args:
+        articles: List of article objects or dicts with fields:
+            id, source, title, summary, url, published_at, ingested_at, text
+        session: SQLAlchemy session
+
+    Returns:
+        Number of articles uploaded
+    """
+    from sqlalchemy.dialects.postgresql import insert
+    from rds_postgres.models import Article
+
+    uploaded = 0
+
+    for article in articles:
+        if hasattr(article, "id"):
+            data = {
+                "id": article.id,
+                "source": article.source,
+                "title": article.title,
+                "summary": article.summary,
+                "url": article.url,
+                "published_at": article.published_at,
+                "ingested_at": article.ingested_at,
+                "text": article.text,
+            }
+        else:
+            data = {
+                "id": article["id"],
+                "source": article["source"],
+                "title": article["title"],
+                "summary": article["summary"],
+                "url": article["url"],
+                "published_at": article["published_at"],
+                "ingested_at": article["ingested_at"],
+                "text": article.get("text"),
+            }
+
+        stmt = insert(Article).values(**data).on_conflict_do_update(
+            index_elements=["id"],
+            set_=data,
+        )
+        session.execute(stmt)
+        uploaded += 1
+
+    session.commit()
+    return uploaded
