@@ -1,0 +1,117 @@
+name: Ingest Articles
+
+on:
+  workflow_call:
+    inputs:
+      lookback-hours:
+        type: number
+        default: 12
+      sources:
+        type: string
+        default: ''
+      load-s3:
+        type: boolean
+        default: false
+      load-rds:
+        type: boolean
+        default: false
+      load-local:
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      lookback-hours:
+        description: 'Number of hours to look back for articles'
+        type: number
+        default: 12
+      sources:
+        description: 'Comma-separated list of sources (leave empty for all)'
+        type: string
+        default: ''
+      load-s3:
+        description: 'Upload articles to S3'
+        type: boolean
+        default: false
+      load-rds:
+        description: 'Load articles to RDS'
+        type: boolean
+        default: false
+      load-local:
+        description: 'Save articles to local file'
+        type: boolean
+        default: false
+
+jobs:
+  ingest-articles:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-ingest-articles-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --with ingest
+
+      - name: Build command arguments
+        id: build-args
+        run: |
+          ARGS="--lookback-hours ${{ inputs.lookback-hours }}"
+          if [ -n "${{ inputs.sources }}" ]; then
+            ARGS="$ARGS --sources ${{ inputs.sources }}"
+          fi
+          if [ "${{ inputs.load-s3 }}" = "true" ]; then
+            ARGS="$ARGS --load-s3"
+          fi
+          if [ "${{ inputs.load-rds }}" = "true" ]; then
+            ARGS="$ARGS --load-rds"
+          fi
+          if [ "${{ inputs.load-local }}" = "true" ]; then
+            ARGS="$ARGS --load-local"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Run ingest_articles
+        env:
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          RDS_HOST: ${{ secrets.RDS_HOST }}
+          RDS_PORT: ${{ secrets.RDS_PORT }}
+          RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
+          RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
+          RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+        run: poetry run python -m ingest_articles ${{ steps.build-args.outputs.args }}
+
+      - name: Upload local output
+        if: inputs.load-local
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingested-articles
+          path: output/*.jsonl
+          retention-days: 7
