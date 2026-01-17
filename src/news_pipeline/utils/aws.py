@@ -84,7 +84,7 @@ def read_jsonl_from_s3(bucket: str, key: str) -> Iterator[dict]:
             yield json.loads(line)
 
 
-def upload_articles(articles: list[Any], session: Any) -> int:
+def upload_articles(articles: list[Any], session: Any) -> tuple[int, int]:
     """
     Upload articles to RDS PostgreSQL.
 
@@ -94,43 +94,52 @@ def upload_articles(articles: list[Any], session: Any) -> int:
         session: SQLAlchemy session
 
     Returns:
-        Number of articles uploaded
+        Tuple of (articles inserted, articles skipped)
     """
+    import logging
     from sqlalchemy.dialects.postgresql import insert
     from rds_postgres.models import Article
 
-    uploaded = 0
+    logger = logging.getLogger(__name__)
+    inserted = 0
+    skipped = 0
 
     for article in articles:
         if hasattr(article, "id"):
+            article_id = article.id
+            url = article.url
             data = {
-                "id": article.id,
+                "id": article_id,
                 "source": article.source,
                 "title": article.title,
                 "summary": article.summary,
-                "url": article.url,
+                "url": url,
                 "published_at": article.published_at,
                 "ingested_at": article.ingested_at,
                 "text": article.text,
             }
         else:
+            article_id = article["id"]
+            url = article["url"]
             data = {
-                "id": article["id"],
+                "id": article_id,
                 "source": article["source"],
                 "title": article["title"],
                 "summary": article["summary"],
-                "url": article["url"],
+                "url": url,
                 "published_at": article["published_at"],
                 "ingested_at": article["ingested_at"],
                 "text": article.get("text"),
             }
 
-        stmt = insert(Article).values(**data).on_conflict_do_update(
-            index_elements=["id"],
-            set_=data,
-        )
-        session.execute(stmt)
-        uploaded += 1
+        stmt = insert(Article).values(**data).on_conflict_do_nothing()
+        result = session.execute(stmt)
+
+        if result.rowcount > 0:
+            inserted += 1
+        else:
+            logger.warning("Skipped duplicate article: id=%s url=%s", article_id, url)
+            skipped += 1
 
     session.commit()
-    return uploaded
+    return inserted, skipped

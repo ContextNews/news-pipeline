@@ -84,8 +84,8 @@ def main() -> None:
         from rds_postgres.connection import get_session
 
         with get_session() as session:
-            articles_loaded = upload_articles(ingested_articles, session)
-        logger.info("Loaded %d articles to RDS", articles_loaded)
+            inserted, skipped = upload_articles(ingested_articles, session)
+        logger.info("Loaded %d articles to RDS (%d skipped as duplicates)", inserted, skipped)
 
 
 if __name__ == "__main__":
