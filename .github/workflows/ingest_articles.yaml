@@ -102,11 +102,7 @@ jobs:
         env:
           PYTHONPATH: src
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-          RDS_HOST: ${{ secrets.RDS_HOST }}
-          RDS_PORT: ${{ secrets.RDS_PORT }}
-          RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
-          RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
-          RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: poetry run python -m ingest_articles ${{ steps.build-args.outputs.args }}
 
       - name: Upload local output

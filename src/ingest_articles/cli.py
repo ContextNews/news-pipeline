@@ -19,8 +19,6 @@ from news_pipeline.utils.serialization import serialize_dataclass
 
 load_dotenv()
 
-from rds_postgres.connection import get_session
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -101,6 +99,8 @@ def main() -> None:
         logger.info("Saved %d cleaned articles to %s", len(ingested_articles), filepath)
 
     if args.load_rds:
+        from rds_postgres.connection import get_session
+
         records = [_to_load_article_dict(article) for article in ingested_articles]
         with get_session() as session:
             articles_loaded, entities_loaded, article_entities_loaded = load_articles(
