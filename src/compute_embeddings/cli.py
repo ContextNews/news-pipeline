@@ -26,44 +26,44 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 
 
-def _article_to_dict(article: object) -> dict[str, object]:
-    return {
-        "id": article.id,
-        "source": article.source,
-        "title": article.title,
-        "summary": article.summary,
-        "url": article.url,
-        "published_at": article.published_at,
-        "ingested_at": article.ingested_at,
-        "text": article.text,
-    }
-
-
 def _load_articles_from_rds(ingested_date: date, model: str, overwrite: bool) -> list[dict]:
     """Load articles from RDS for a specific ingested date (UTC)."""
-    from sqlalchemy import and_, select
+    from sqlalchemy import text
 
     from rds_postgres.connection import get_session
-    from rds_postgres.models import Article
 
-    start = datetime.combine(ingested_date, datetime.min.time(), tzinfo=timezone.utc)
+    start = datetime.combine(ingested_date, datetime.min.time())
     end = start + timedelta(days=1)
 
     logger.info("Loading articles ingested from %s to %s", start.isoformat(), end.isoformat())
     with get_session() as session:
-        stmt = select(Article).where(
-            Article.ingested_at >= start,
-            Article.ingested_at < end,
+        stmt = text(
+            """
+            SELECT
+                a.id,
+                a.source,
+                a.title,
+                a.summary,
+                a.url,
+                a.published_at,
+                a.ingested_at,
+                a.text
+            FROM articles a
+            WHERE a.ingested_at >= :start
+              AND a.ingested_at < :end
+              AND (:overwrite OR NOT EXISTS (
+                    SELECT 1
+                    FROM article_embeddings e
+                    WHERE e.article_id = a.id
+                      AND e.embedding_model = :model
+                ))
+            """
         )
-        if not overwrite:
-            stmt = stmt.where(
-                ~and_(
-                    Article.embedding.is_not(None),
-                    Article.embedding_model == model,
-                )
-            )
-        results = session.execute(stmt).scalars().all()
-        articles = [_article_to_dict(article) for article in results]
+        results = session.execute(
+            stmt,
+            {"start": start, "end": end, "overwrite": overwrite, "model": model},
+        ).mappings().all()
+        articles = [dict(row) for row in results]
 
     logger.info("Loaded %d articles from RDS", len(articles))
     return articles
@@ -145,31 +145,45 @@ def main() -> None:
         logger.info("Uploaded %d embedded articles to s3://%s/%s", len(embedded_articles), bucket, key)
 
     if args.load_rds:
-        from sqlalchemy import update
+        from sqlalchemy import text
 
         from rds_postgres.connection import get_session
-        from rds_postgres.models import Article
 
         updated = 0
-        skipped = 0
+        inserted = 0
         with get_session() as session:
             for article in embedded_articles:
-                stmt = (
-                    update(Article)
-                    .where(Article.id == article.id)
-                    .values(
-                        embedded_text=article.embedded_text,
-                        embedding=article.embedding,
-                        embedding_model=article.embedding_model,
-                    )
+                params = {
+                    "article_id": article.id,
+                    "embedded_text": article.embedded_text,
+                    "embedding": article.embedding,
+                    "embedding_model": article.embedding_model,
+                }
+                update_stmt = text(
+                    """
+                    UPDATE article_embeddings
+                    SET embedded_text = :embedded_text,
+                        embedding = :embedding
+                    WHERE article_id = :article_id
+                      AND embedding_model = :embedding_model
+                    """
                 )
-                result = session.execute(stmt)
+                result = session.execute(update_stmt, params)
                 if result.rowcount and result.rowcount > 0:
                     updated += 1
-                else:
-                    skipped += 1
+                    continue
+                insert_stmt = text(
+                    """
+                    INSERT INTO article_embeddings
+                        (article_id, embedded_text, embedding, embedding_model)
+                    VALUES
+                        (:article_id, :embedded_text, :embedding, :embedding_model)
+                    """
+                )
+                session.execute(insert_stmt, params)
+                inserted += 1
             session.commit()
-        logger.info("Updated %d articles in RDS (%d skipped)", updated, skipped)
+        logger.info("Upserted %d embeddings in RDS (%d updated, %d inserted)", updated + inserted, updated, inserted)
 
     if args.load_local:
         output_dir = Path("output")
