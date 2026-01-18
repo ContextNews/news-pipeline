@@ -76,6 +76,12 @@ def _load_articles_with_embeddings(
 def _build_cluster_records(records: list[dict[str, object]]) -> list[dict[str, object]]:
     output = []
     for record in records:
+        published_at = record.get("published_at")
+        ingested_at = record.get("ingested_at")
+        if isinstance(published_at, datetime):
+            published_at = published_at.isoformat()
+        if isinstance(ingested_at, datetime):
+            ingested_at = ingested_at.isoformat()
         output.append(
             {
                 "id": record.get("id"),
@@ -83,8 +89,8 @@ def _build_cluster_records(records: list[dict[str, object]]) -> list[dict[str, o
                 "title": record.get("title"),
                 "summary": record.get("summary"),
                 "url": record.get("url"),
-                "published_at": record.get("published_at"),
-                "ingested_at": record.get("ingested_at"),
+                "published_at": published_at,
+                "ingested_at": ingested_at,
                 "text": record.get("text"),
                 "cluster_id": record.get("cluster_id"),
                 "embedding_model": record.get("embedding_model"),
