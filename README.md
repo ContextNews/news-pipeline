@@ -1,68 +1,40 @@
 # News Pipeline
 
-A modular, batch-oriented news processing pipeline that ingests articles from RSS feeds, enriches them with NLP processing (cleaning, embeddings, entity extraction), and loads them into PostgreSQL for downstream analysis and serving.
+## Overview
+News Pipeline ingests RSS articles, computes embeddings, and clusters related stories. It writes raw/processed data to S3 and persists core entities in RDS (PostgreSQL). The repo is organized around standalone services with CLIs and GitHub Actions workflows, plus shared utilities under `src/common`.
 
-The pipeline is designed for correctness, re-runnability, and transparency. Each stage is isolated, deterministic, and produces explicit, versioned outputs stored in S3.
+## Components
+- `ingest_articles`: Fetches articles from RSS sources, cleans/normalizes, and loads to S3/RDS.
+- `compute_embeddings`: Pulls articles from RDS by `ingested_at` date, computes sentence-transformer embeddings, and writes to S3 and the `article_embeddings` table.
+- `cluster_articles`: Pulls articles + embeddings for a date, clusters with HDBSCAN, and writes results to S3 and the `article_clusters` / `article_cluster_articles` tables.
+- `common`: Shared utilities for AWS/S3 helpers, datetime parsing, hashing, and dataclass serialization.
 
-## How It Works
+## Actions
+- `Ingest Articles` (`.github/workflows/ingest_articles.yaml`)
+  - Manual trigger or reusable workflow.
+  - Defaults to loading to S3 and RDS.
+  - Sources default to `all` (fetches all configured sources).
 
-The pipeline consists of five sequential stages, each reading from the previous stage's S3 output:
+- `Compute Embeddings` (`.github/workflows/compute_embeddings.yaml`)
+  - Manual trigger or reusable workflow.
+  - Embeds articles for a given date (defaults to today, UK time).
+  - Defaults to loading to S3 and RDS.
 
-### Stage 1: Ingest
+- `Cluster Articles` (`.github/workflows/cluster_articles.yaml`)
+  - Manual trigger or reusable workflow.
+  - Clusters by date and embedding model using HDBSCAN.
+  - Defaults to loading to S3 and RDS; overwrite is enabled by default.
 
-Fetches articles from 28+ RSS feeds (BBC, CNN, Guardian, NPR, Reuters, etc.) and extracts full article text.
+- `Run Pipeline` (`.github/workflows/run_pipeline.yaml`)
+  - Runs ingest -> embeddings -> clustering sequentially.
+  - Scheduled at 06:00 and 18:00 UTC.
+  - Exposes the full set of inputs for each stage.
 
-- Parses RSS entries for metadata (title, summary, URL, published date)
-- Extracts full article text using Trafilatura with Readability fallback
-- Generates deterministic article IDs from source + URL hash
-- Outputs to `s3://bucket/ingested_articles/year=YYYY/month=MM/day=DD/`
+## Local CLI Usage (examples)
+- Ingest: `poetry run python -m ingest_articles --load-s3 --load-rds`
+- Embed: `poetry run python -m compute_embeddings.cli --load-s3 --load-rds`
+- Cluster: `poetry run python -m cluster_articles --load-s3 --load-rds`
 
-### Stage 2: Clean
-
-Cleans and normalizes text from raw articles.
-
-- Strips HTML tags and fixes escaped characters
-- Collapses whitespace and normalizes formatting
-- Validates and parses datetime fields
-- Outputs to `s3://bucket/cleaned_articles/year=YYYY/month=MM/day=DD/`
-
-### Stage 3: Embed
-
-Generates semantic embeddings for similarity-based analysis.
-
-- Combines title + summary + article text (truncated to 250 words)
-- Uses SentenceTransformer model (all-mpnet-base-v2, 768 dimensions)
-- Processes in batches for efficiency
-- Outputs to `s3://bucket/embedded_articles/year=YYYY/month=MM/day=DD/`
-
-### Stage 4: Extract
-
-Extracts named entities using spaCy transformer models.
-
-- Identifies PERSON, ORG, GPE (geopolitical), and LOC (location) entities
-- Uses en_core_web_trf model for highest accuracy
-- Deduplicates entities per article
-- Outputs to `s3://bucket/extracted_articles/year=YYYY/month=MM/day=DD/`
-
-### Stage 5: Load
-
-Loads processed articles and entities into PostgreSQL.
-
-- Upserts articles (updates on ID conflict)
-- Inserts unique entities (type + name composite key)
-- Creates article-entity relationships
-- All operations are idempotent for safe re-runs
-
-## GitHub Actions
-
-| Action  | Workflow       | Description                          |
-| ------- | -------------- | ------------------------------------ |
-| Ingest  | `ingest.yaml`  | Fetch articles from RSS feeds        |
-| Clean   | `clean.yaml`   | Clean and normalize article text     |
-| Embed   | `embed.yaml`   | Generate semantic embeddings         |
-| Extract | `extract.yaml` | Extract named entities               |
-| Load    | `load.yaml`    | Load articles into PostgreSQL        |
-| Run     | `run.yaml`     | Run full pipeline (all stages)       |
-| Reset   | `reset.yaml`   | Delete S3 data for re-processing     |
-
-All workflows use AWS OIDC for authentication and cache dependencies/models between runs.
+## Notes
+- RDS access uses an SSH tunnel (bastion) in workflows.
+- Embeddings are stored in `article_embeddings`; clusters are stored in `article_clusters` and `article_cluster_articles`.
