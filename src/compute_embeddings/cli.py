@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -14,8 +14,6 @@ from dotenv import load_dotenv
 from compute_embeddings.compute_embeddings import compute_embeddings
 from news_pipeline.utils.aws import (
     build_s3_key,
-    list_s3_jsonl_files,
-    read_jsonl_from_s3,
     upload_jsonl_to_s3,
 )
 from news_pipeline.utils.serialization import serialize_dataclass
@@ -28,47 +26,59 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 
 
-def _load_articles_from_s3(bucket: str, prefix: str) -> list[dict]:
-    """Load articles from S3 JSONL files."""
-    files = list_s3_jsonl_files(bucket, prefix)
-    if not files:
-        logger.warning("No JSONL files found in s3://%s/%s", bucket, prefix)
-        return []
+def _article_to_dict(article: object) -> dict[str, object]:
+    return {
+        "id": article.id,
+        "source": article.source,
+        "title": article.title,
+        "summary": article.summary,
+        "url": article.url,
+        "published_at": article.published_at,
+        "ingested_at": article.ingested_at,
+        "text": article.text,
+    }
 
-    articles = []
-    for key in files:
-        logger.info("Loading articles from s3://%s/%s", bucket, key)
-        for article in read_jsonl_from_s3(bucket, key):
-            articles.append(article)
 
-    logger.info("Loaded %d articles from S3", len(articles))
+def _load_articles_from_rds(ingested_date: date) -> list[dict]:
+    """Load articles from RDS for a specific ingested date (UTC)."""
+    from sqlalchemy import select
+
+    from rds_postgres.connection import get_session
+    from rds_postgres.models import Article
+
+    start = datetime.combine(ingested_date, datetime.min.time(), tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+
+    logger.info("Loading articles ingested from %s to %s", start.isoformat(), end.isoformat())
+    with get_session() as session:
+        stmt = select(Article).where(
+            Article.ingested_at >= start,
+            Article.ingested_at < end,
+        )
+        results = session.execute(stmt).scalars().all()
+        articles = [_article_to_dict(article) for article in results]
+
+    logger.info("Loaded %d articles from RDS", len(articles))
     return articles
 
 
-def _load_articles_from_local(path: str) -> list[dict]:
-    """Load articles from local JSONL file."""
-    filepath = Path(path)
-    if not filepath.exists():
-        logger.error("File not found: %s", path)
-        return []
-
-    articles = []
-    with filepath.open() as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                articles.append(json.loads(line))
-
-    logger.info("Loaded %d articles from %s", len(articles), path)
-    return articles
+def _parse_ingested_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("ingested-date must be YYYY-MM-DD") from exc
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
 
     # Input options
-    parser.add_argument("--input-s3-prefix", help="S3 prefix to load articles from")
-    parser.add_argument("--input-local", help="Local JSONL file to load articles from")
+    parser.add_argument(
+        "--ingested-date",
+        type=_parse_ingested_date,
+        default=date.today(),
+        help="UTC date (YYYY-MM-DD)",
+    )
 
     # Model options
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Sentence transformer model (default: {DEFAULT_MODEL})")
@@ -86,15 +96,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Load articles
-    if args.input_s3_prefix:
-        bucket = os.environ["S3_BUCKET_NAME"]
-        articles = _load_articles_from_s3(bucket, args.input_s3_prefix)
-    elif args.input_local:
-        articles = _load_articles_from_local(args.input_local)
-    else:
-        logger.error("Must specify --input-s3-prefix or --input-local")
-        return
+    load_dotenv()
+    articles = _load_articles_from_rds(args.ingested_date)
 
     if not articles:
         logger.warning("No articles to process")

@@ -3,10 +3,11 @@ name: Compute Embeddings
 on:
   workflow_dispatch:
     inputs:
-      input-s3-prefix:
-        description: 'S3 prefix to load articles from (e.g. cleaned_articles/2025/03/10)'
+      ingested-date:
+        description: 'UTC date to load from RDS (YYYY-MM-DD)'
         type: string
-        required: true
+        required: false
+        default: ''
       model:
         description: 'Sentence-transformers model name'
         type: string
@@ -56,6 +57,21 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-west-2
 
+      - name: Set up SSH tunnel
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BASTION_SSH_KEY }}" > ~/.ssh/bastion_key
+          chmod 600 ~/.ssh/bastion_key
+
+          ssh-keyscan -H ${{ secrets.BASTION_IP }} >> ~/.ssh/known_hosts 2>&1
+
+          ssh -f -N -L 5432:${{ secrets.RDS_ENDPOINT }}:5432 \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=60 \
+            -i ~/.ssh/bastion_key \
+            ec2-user@${{ secrets.BASTION_IP }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -82,7 +98,11 @@ jobs:
       - name: Build command arguments
         id: build-args
         run: |
-          ARGS="--input-s3-prefix ${{ inputs.input-s3-prefix }}"
+          if [ -n "${{ inputs.ingested-date }}" ]; then
+            ARGS="--ingested-date ${{ inputs.ingested-date }}"
+          else
+            ARGS="--ingested-date $(date -u +%F)"
+          fi
           ARGS="$ARGS --model ${{ inputs.model }}"
           ARGS="$ARGS --batch-size ${{ inputs.batch-size }}"
           if [ "${{ inputs.word-limit }}" -gt 0 ]; then
@@ -109,6 +129,7 @@ jobs:
         env:
           PYTHONPATH: src
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD }}@localhost:5432/contextdb
         run: poetry run python -m compute_embeddings.cli ${{ steps.build-args.outputs.args }}
 
       - name: Upload local output
