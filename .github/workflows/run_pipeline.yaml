@@ -72,25 +72,21 @@ on:
       cluster-min-cluster-size:
         description: 'Minimum cluster size'
         type: number
-        default: 5
+        default: 2
       cluster-min-samples:
         description: 'Minimum samples (leave empty for default)'
         type: number
         default: 0
       cluster-load-s3:
-        description: 'Upload clustered articles to S3'
-        type: boolean
-        default: false
-      cluster-load-rds:
-        description: 'Save clusters to RDS'
+        description: 'Load to S3'
         type: boolean
         default: true
-      cluster-load-local:
-        description: 'Save clustered articles to local file'
+      cluster-load-rds:
+        description: 'Load to RDS'
         type: boolean
-        default: false
+        default: true
       cluster-overwrite-clusters:
-        description: 'Overwrite existing clusters for the ingested date'
+        description: 'Overwrite existing clusters'
         type: boolean
         default: true
 
@@ -128,5 +124,4 @@ jobs:
       min-samples: ${{ inputs.cluster-min-samples }}
       load-s3: ${{ inputs.cluster-load-s3 }}
       load-rds: ${{ inputs.cluster-load-rds }}
-      load-local: ${{ inputs.cluster-load-local }}
       overwrite-clusters: ${{ inputs.cluster-overwrite-clusters }}

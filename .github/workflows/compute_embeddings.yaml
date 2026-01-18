@@ -65,7 +65,7 @@ on:
         type: boolean
         default: false
       overwrite:
-        description: 'Re-embed articles even if already embedded for this model'
+        description: 'Embed articles with existing embeddings'
         type: boolean
         default: false
       load-s3:
