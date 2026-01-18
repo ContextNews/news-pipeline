@@ -97,6 +97,7 @@ permissions:
 jobs:
   ingest:
     uses: ./.github/workflows/ingest_articles.yaml
+    secrets: inherit
     with:
       lookback-hours: ${{ inputs.ingest-lookback-hours != '' && fromJSON(inputs.ingest-lookback-hours) || 12 }}
       sources: ${{ inputs.ingest-sources }}
@@ -106,6 +107,7 @@ jobs:
   embed:
     needs: ingest
     uses: ./.github/workflows/compute_embeddings.yaml
+    secrets: inherit
     with:
       ingested-date: ${{ inputs.embed-ingested-date }}
       model: ${{ inputs.embed-model }}
@@ -121,6 +123,7 @@ jobs:
   cluster:
     needs: embed
     uses: ./.github/workflows/cluster_articles.yaml
+    secrets: inherit
     with:
       ingested-date: ${{ inputs.cluster-ingested-date }}
       embedding-model: ${{ inputs.cluster-embedding-model }}
