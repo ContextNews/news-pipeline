@@ -40,6 +40,10 @@ on:
         description: 'Upload embedded articles to S3'
         type: boolean
         default: false
+      load-rds:
+        description: 'Load embeddings into RDS'
+        type: boolean
+        default: false
       load-local:
         description: 'Save embedded articles to local file'
         type: boolean
@@ -126,6 +130,9 @@ jobs:
           fi
           if [ "${{ inputs.load-s3 }}" = "true" ]; then
             ARGS="$ARGS --load-s3"
+          fi
+          if [ "${{ inputs.load-rds }}" = "true" ]; then
+            ARGS="$ARGS --load-rds"
           fi
           if [ "${{ inputs.load-local }}" = "true" ]; then
             ARGS="$ARGS --load-local"

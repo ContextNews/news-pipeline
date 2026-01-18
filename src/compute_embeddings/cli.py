@@ -104,6 +104,7 @@ def main() -> None:
 
     # Output options
     parser.add_argument("--load-s3", action="store_true", help="Upload results to S3")
+    parser.add_argument("--load-rds", action="store_true", help="Load embeddings into RDS")
     parser.add_argument("--load-local", action="store_true", help="Save results to local file")
 
     args = parser.parse_args()
@@ -142,6 +143,33 @@ def main() -> None:
         records = [serialize_dataclass(article) for article in embedded_articles]
         upload_jsonl_to_s3(records, bucket, key)
         logger.info("Uploaded %d embedded articles to s3://%s/%s", len(embedded_articles), bucket, key)
+
+    if args.load_rds:
+        from sqlalchemy import update
+
+        from rds_postgres.connection import get_session
+        from rds_postgres.models import Article
+
+        updated = 0
+        skipped = 0
+        with get_session() as session:
+            for article in embedded_articles:
+                stmt = (
+                    update(Article)
+                    .where(Article.id == article.id)
+                    .values(
+                        embedded_text=article.embedded_text,
+                        embedding=article.embedding,
+                        embedding_model=article.embedding_model,
+                    )
+                )
+                result = session.execute(stmt)
+                if result.rowcount and result.rowcount > 0:
+                    updated += 1
+                else:
+                    skipped += 1
+            session.commit()
+        logger.info("Updated %d articles in RDS (%d skipped)", updated, skipped)
 
     if args.load_local:
         output_dir = Path("output")
