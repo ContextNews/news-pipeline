@@ -111,6 +111,12 @@ def main() -> None:
     parser.add_argument("--load-s3", action="store_true", help="Upload results to S3")
     parser.add_argument("--load-rds", action="store_true", help="Save clusters to RDS")
     parser.add_argument("--load-local", action="store_true", help="Save results to local file")
+    parser.add_argument(
+        "--overwrite-clusters",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Overwrite existing clusters for the ingested date",
+    )
     args = parser.parse_args()
 
     load_dotenv()
@@ -159,6 +165,36 @@ def main() -> None:
         else:
             clustered_at = datetime.now(timezone.utc)
             with get_session() as session:
+                if args.overwrite_clusters:
+                    delete_stmt = text(
+                        """
+                        DELETE FROM article_cluster_articles aca
+                        USING article_clusters ac
+                        WHERE aca.article_cluster_id = ac.article_cluster_id
+                          AND ac.clustered_at >= :start
+                          AND ac.clustered_at < :end
+                        """
+                    )
+                    session.execute(
+                        delete_stmt,
+                        {
+                            "start": datetime.combine(args.ingested_date, datetime.min.time()),
+                            "end": datetime.combine(args.ingested_date, datetime.min.time()) + timedelta(days=1),
+                        },
+                    )
+                    session.execute(
+                        text(
+                            """
+                            DELETE FROM article_clusters
+                            WHERE clustered_at >= :start
+                              AND clustered_at < :end
+                            """
+                        ),
+                        {
+                            "start": datetime.combine(args.ingested_date, datetime.min.time()),
+                            "end": datetime.combine(args.ingested_date, datetime.min.time()) + timedelta(days=1),
+                        },
+                    )
                 for _, article_ids in clusters.items():
                     cluster_id = uuid4().hex
                     session.execute(

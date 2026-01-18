@@ -32,6 +32,10 @@ on:
         description: 'Save clustered articles to local file'
         type: boolean
         default: false
+      overwrite-clusters:
+        description: 'Overwrite existing clusters for the ingested date'
+        type: boolean
+        default: true
 
 jobs:
   cluster-articles:
@@ -108,6 +112,9 @@ jobs:
           fi
           if [ "${{ inputs.load-local }}" = "true" ]; then
             ARGS="$ARGS --load-local"
+          fi
+          if [ "${{ inputs.overwrite-clusters }}" = "false" ]; then
+            ARGS="$ARGS --no-overwrite-clusters"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 
