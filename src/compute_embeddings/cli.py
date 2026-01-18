@@ -39,9 +39,9 @@ def _article_to_dict(article: object) -> dict[str, object]:
     }
 
 
-def _load_articles_from_rds(ingested_date: date) -> list[dict]:
+def _load_articles_from_rds(ingested_date: date, model: str, overwrite: bool) -> list[dict]:
     """Load articles from RDS for a specific ingested date (UTC)."""
-    from sqlalchemy import select
+    from sqlalchemy import and_, select
 
     from rds_postgres.connection import get_session
     from rds_postgres.models import Article
@@ -55,6 +55,13 @@ def _load_articles_from_rds(ingested_date: date) -> list[dict]:
             Article.ingested_at >= start,
             Article.ingested_at < end,
         )
+        if not overwrite:
+            stmt = stmt.where(
+                ~and_(
+                    Article.embedding.is_not(None),
+                    Article.embedding_model == model,
+                )
+            )
         results = session.execute(stmt).scalars().all()
         articles = [_article_to_dict(article) for article in results]
 
@@ -79,6 +86,11 @@ def main() -> None:
         default=date.today(),
         help="UTC date (YYYY-MM-DD)",
     )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Re-embed even if the article already has an embedding for this model",
+    )
 
     # Model options
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Sentence transformer model (default: {DEFAULT_MODEL})")
@@ -97,7 +109,7 @@ def main() -> None:
     args = parser.parse_args()
 
     load_dotenv()
-    articles = _load_articles_from_rds(args.ingested_date)
+    articles = _load_articles_from_rds(args.ingested_date, args.model, args.overwrite)
 
     if not articles:
         logger.warning("No articles to process")

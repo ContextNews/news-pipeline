@@ -32,6 +32,10 @@ on:
         description: 'Exclude text from embedding'
         type: boolean
         default: false
+      overwrite:
+        description: 'Re-embed articles even if already embedded for this model'
+        type: boolean
+        default: false
       load-s3:
         description: 'Upload embedded articles to S3'
         type: boolean
@@ -116,6 +120,9 @@ jobs:
           fi
           if [ "${{ inputs.no-text }}" = "true" ]; then
             ARGS="$ARGS --no-text"
+          fi
+          if [ "${{ inputs.overwrite }}" = "true" ]; then
+            ARGS="$ARGS --overwrite"
           fi
           if [ "${{ inputs.load-s3 }}" = "true" ]; then
             ARGS="$ARGS --load-s3"
