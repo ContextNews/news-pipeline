@@ -34,9 +34,9 @@ on:
         type: number
         default: 32
       embed-word-limit:
-        description: 'Max words to embed (leave empty for no limit)'
+        description: 'Embedded words limit'
         type: number
-        default: 0
+        default: 300
       embed-no-title:
         description: 'Exclude title from embedding'
         type: boolean
@@ -54,17 +54,13 @@ on:
         type: boolean
         default: false
       embed-load-s3:
-        description: 'Upload embedded articles to S3'
-        type: boolean
-        default: false
-      embed-load-rds:
-        description: 'Load embeddings into RDS'
+        description: 'Load articles to S3'
         type: boolean
         default: true
-      embed-load-local:
-        description: 'Save embedded articles to local file'
+      embed-load-rds:
+        description: 'Load articles to RDS'
         type: boolean
-        default: false
+        default: true
       cluster-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
         type: string
@@ -121,7 +117,6 @@ jobs:
       overwrite: ${{ inputs.embed-overwrite }}
       load-s3: ${{ inputs.embed-load-s3 }}
       load-rds: ${{ inputs.embed-load-rds }}
-      load-local: ${{ inputs.embed-load-local }}
 
   cluster:
     needs: embed
