@@ -25,11 +25,15 @@ logger = logging.getLogger(__name__)
 def _parse_sources(value: str | None) -> list[str]:
     if not value:
         return list(RSS_FEEDS.keys())
+    if value.strip().lower() == "all":
+        return list(RSS_FEEDS.keys())
     sources = []
     for part in value.split(","):
         source = part.strip()
         if source:
             sources.append(source)
+    if "all" in {source.lower() for source in sources}:
+        return list(RSS_FEEDS.keys())
     return sources or list(RSS_FEEDS.keys())
 
 

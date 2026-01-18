@@ -8,7 +8,7 @@ on:
         default: 12
       sources:
         type: string
-        default: ''
+        default: 'all'
       load-s3:
         type: boolean
         default: true
@@ -22,9 +22,9 @@ on:
         type: number
         default: 12
       sources:
-        description: 'Comma-separated list of sources (leave empty for all)'
+        description: 'Sources'
         type: string
-        default: ''
+        default: 'all'
       load-s3:
         description: 'Load articles to S3'
         type: boolean
