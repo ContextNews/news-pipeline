@@ -11,17 +11,14 @@ on:
         default: ''
       load-s3:
         type: boolean
-        default: false
+        default: true
       load-rds:
         type: boolean
-        default: false
-      load-local:
-        type: boolean
-        default: false
+        default: true
   workflow_dispatch:
     inputs:
       lookback-hours:
-        description: 'Number of hours to look back for articles'
+        description: 'Fetch articles lookback (Hours)'
         type: number
         default: 12
       sources:
@@ -29,17 +26,13 @@ on:
         type: string
         default: ''
       load-s3:
-        description: 'Upload articles to S3'
+        description: 'Load articles to S3'
         type: boolean
-        default: false
+        default: true
       load-rds:
         description: 'Load articles to RDS'
         type: boolean
-        default: false
-      load-local:
-        description: 'Save articles to local file'
-        type: boolean
-        default: false
+        default: true
 
 jobs:
   ingest-articles:
@@ -109,9 +102,6 @@ jobs:
           if [ "${{ inputs.load-rds }}" = "true" ]; then
             ARGS="$ARGS --load-rds"
           fi
-          if [ "${{ inputs.load-local }}" = "true" ]; then
-            ARGS="$ARGS --load-local"
-          fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 
       - name: Run ingest_articles
@@ -120,11 +110,3 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD }}@localhost:5432/contextdb
         run: poetry run python -m ingest_articles ${{ steps.build-args.outputs.args }}
-
-      - name: Upload local output
-        if: inputs.load-local
-        uses: actions/upload-artifact@v4
-        with:
-          name: ingested-articles
-          path: output/*.jsonl
-          retention-days: 7

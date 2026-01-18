@@ -1,6 +1,41 @@
 name: Compute Embeddings
 
 on:
+  workflow_call:
+    inputs:
+      ingested-date:
+        type: string
+        default: ''
+      model:
+        type: string
+        default: 'all-MiniLM-L6-v2'
+      batch-size:
+        type: number
+        default: 32
+      word-limit:
+        type: number
+        default: 0
+      no-title:
+        type: boolean
+        default: false
+      no-summary:
+        type: boolean
+        default: false
+      no-text:
+        type: boolean
+        default: false
+      overwrite:
+        type: boolean
+        default: false
+      load-s3:
+        type: boolean
+        default: false
+      load-rds:
+        type: boolean
+        default: false
+      load-local:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       ingested-date:

@@ -1,0 +1,137 @@
+name: Run Pipeline
+
+on:
+  schedule:
+    - cron: "0 6,18 * * *"
+  workflow_dispatch:
+    inputs:
+      ingest-lookback-hours:
+        description: 'Number of hours to look back for articles'
+        type: number
+        default: 12
+      ingest-sources:
+        description: 'Comma-separated list of sources (leave empty for all)'
+        type: string
+        default: ''
+      ingest-load-s3:
+        description: 'Load ingested articles to S3'
+        type: boolean
+        default: true
+      ingest-load-rds:
+        description: 'Load ingested articles to RDS'
+        type: boolean
+        default: true
+      embed-ingested-date:
+        description: 'UTC date to load from RDS (YYYY-MM-DD)'
+        type: string
+        default: ''
+      embed-model:
+        description: 'Sentence-transformers model name'
+        type: string
+        default: 'all-MiniLM-L6-v2'
+      embed-batch-size:
+        description: 'Batch size for encoding'
+        type: number
+        default: 32
+      embed-word-limit:
+        description: 'Max words to embed (leave empty for no limit)'
+        type: number
+        default: 0
+      embed-no-title:
+        description: 'Exclude title from embedding'
+        type: boolean
+        default: false
+      embed-no-summary:
+        description: 'Exclude summary from embedding'
+        type: boolean
+        default: false
+      embed-no-text:
+        description: 'Exclude text from embedding'
+        type: boolean
+        default: false
+      embed-overwrite:
+        description: 'Re-embed articles even if already embedded for this model'
+        type: boolean
+        default: false
+      embed-load-s3:
+        description: 'Upload embedded articles to S3'
+        type: boolean
+        default: false
+      embed-load-rds:
+        description: 'Load embeddings into RDS'
+        type: boolean
+        default: true
+      embed-load-local:
+        description: 'Save embedded articles to local file'
+        type: boolean
+        default: false
+      cluster-ingested-date:
+        description: 'UTC date to load from RDS (YYYY-MM-DD)'
+        type: string
+        default: ''
+      cluster-embedding-model:
+        description: 'Embedding model to use'
+        type: string
+        default: 'all-MiniLM-L6-v2'
+      cluster-min-cluster-size:
+        description: 'Minimum cluster size'
+        type: number
+        default: 5
+      cluster-min-samples:
+        description: 'Minimum samples (leave empty for default)'
+        type: number
+        default: 0
+      cluster-load-s3:
+        description: 'Upload clustered articles to S3'
+        type: boolean
+        default: false
+      cluster-load-rds:
+        description: 'Save clusters to RDS'
+        type: boolean
+        default: true
+      cluster-load-local:
+        description: 'Save clustered articles to local file'
+        type: boolean
+        default: false
+      cluster-overwrite-clusters:
+        description: 'Overwrite existing clusters for the ingested date'
+        type: boolean
+        default: true
+
+jobs:
+  ingest:
+    uses: ./.github/workflows/ingest_articles.yaml
+    with:
+      lookback-hours: ${{ inputs.ingest-lookback-hours }}
+      sources: ${{ inputs.ingest-sources }}
+      load-s3: ${{ inputs.ingest-load-s3 }}
+      load-rds: ${{ inputs.ingest-load-rds }}
+
+  embed:
+    needs: ingest
+    uses: ./.github/workflows/compute_embeddings.yaml
+    with:
+      ingested-date: ${{ inputs.embed-ingested-date }}
+      model: ${{ inputs.embed-model }}
+      batch-size: ${{ inputs.embed-batch-size }}
+      word-limit: ${{ inputs.embed-word-limit }}
+      no-title: ${{ inputs.embed-no-title }}
+      no-summary: ${{ inputs.embed-no-summary }}
+      no-text: ${{ inputs.embed-no-text }}
+      overwrite: ${{ inputs.embed-overwrite }}
+      load-s3: ${{ inputs.embed-load-s3 }}
+      load-rds: ${{ inputs.embed-load-rds }}
+      load-local: ${{ inputs.embed-load-local }}
+
+  cluster:
+    needs: embed
+    uses: ./.github/workflows/cluster_articles.yaml
+    with:
+      ingested-date: ${{ inputs.cluster-ingested-date }}
+      embedding-model: ${{ inputs.cluster-embedding-model }}
+      min-cluster-size: ${{ inputs.cluster-min-cluster-size }}
+      min-samples: ${{ inputs.cluster-min-samples }}
+      load-s3: ${{ inputs.cluster-load-s3 }}
+      load-rds: ${{ inputs.cluster-load-rds }}
+      load-local: ${{ inputs.cluster-load-local }}
+      overwrite-clusters: ${{ inputs.cluster-overwrite-clusters }}

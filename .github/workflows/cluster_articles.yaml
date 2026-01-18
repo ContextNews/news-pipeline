@@ -1,6 +1,32 @@
 name: Cluster Articles
 
 on:
+  workflow_call:
+    inputs:
+      ingested-date:
+        type: string
+        default: ''
+      embedding-model:
+        type: string
+        default: 'all-MiniLM-L6-v2'
+      min-cluster-size:
+        type: number
+        default: 5
+      min-samples:
+        type: number
+        default: 0
+      load-s3:
+        type: boolean
+        default: false
+      load-rds:
+        type: boolean
+        default: false
+      load-local:
+        type: boolean
+        default: false
+      overwrite-clusters:
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       ingested-date:
