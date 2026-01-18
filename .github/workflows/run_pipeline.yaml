@@ -98,7 +98,7 @@ jobs:
   ingest:
     uses: ./.github/workflows/ingest_articles.yaml
     with:
-      lookback-hours: ${{ inputs.ingest-lookback-hours }}
+      lookback-hours: ${{ inputs.ingest-lookback-hours != '' && fromJSON(inputs.ingest-lookback-hours) || 12 }}
       sources: ${{ inputs.ingest-sources }}
       load-s3: ${{ inputs.ingest-load-s3 }}
       load-rds: ${{ inputs.ingest-load-rds }}
@@ -109,8 +109,8 @@ jobs:
     with:
       ingested-date: ${{ inputs.embed-ingested-date }}
       model: ${{ inputs.embed-model }}
-      batch-size: ${{ inputs.embed-batch-size }}
-      word-limit: ${{ inputs.embed-word-limit }}
+      batch-size: ${{ inputs.embed-batch-size != '' && fromJSON(inputs.embed-batch-size) || 32 }}
+      word-limit: ${{ inputs.embed-word-limit != '' && fromJSON(inputs.embed-word-limit) || 300 }}
       no-title: ${{ inputs.embed-no-title }}
       no-summary: ${{ inputs.embed-no-summary }}
       no-text: ${{ inputs.embed-no-text }}
@@ -124,8 +124,8 @@ jobs:
     with:
       ingested-date: ${{ inputs.cluster-ingested-date }}
       embedding-model: ${{ inputs.cluster-embedding-model }}
-      min-cluster-size: ${{ inputs.cluster-min-cluster-size }}
-      min-samples: ${{ inputs.cluster-min-samples }}
+      min-cluster-size: ${{ inputs.cluster-min-cluster-size != '' && fromJSON(inputs.cluster-min-cluster-size) || 2 }}
+      min-samples: ${{ inputs.cluster-min-samples != '' && fromJSON(inputs.cluster-min-samples) || 0 }}
       load-s3: ${{ inputs.cluster-load-s3 }}
       load-rds: ${{ inputs.cluster-load-rds }}
       overwrite-clusters: ${{ inputs.cluster-overwrite-clusters }}
