@@ -1,6 +1,7 @@
 """Core embedding computation logic."""
 
 import logging
+import re
 from typing import Any
 
 from sentence_transformers import SentenceTransformer
@@ -38,9 +39,18 @@ def _build_text_to_embed(
     combined = " ".join(parts)
 
     if word_limit:
-        words = combined.split()
-        if len(words) > word_limit:
-            combined = " ".join(words[:word_limit])
+        sentences = _split_sentences(combined)
+        selected = []
+        word_count = 0
+        for sentence in sentences:
+            words = sentence.split()
+            if not words:
+                continue
+            if word_count + len(words) > word_limit:
+                break
+            selected.append(sentence)
+            word_count += len(words)
+        combined = " ".join(selected)
 
     return combined
 
@@ -50,6 +60,14 @@ def _get_value(obj: Any, key: str) -> Any:
     if isinstance(obj, dict):
         return obj.get(key)
     return getattr(obj, key, None)
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split text into sentences with a simple punctuation heuristic."""
+    if not text:
+        return []
+    matches = re.findall(r"[^.!?]+[.!?]+|[^.!?]+$", text)
+    return [m.strip() for m in matches if m.strip()]
 
 
 def compute_embeddings(

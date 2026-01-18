@@ -1,0 +1,120 @@
+name: Compute Embeddings
+
+on:
+  workflow_dispatch:
+    inputs:
+      input-s3-prefix:
+        description: 'S3 prefix to load articles from (e.g. cleaned_articles/2025/03/10)'
+        type: string
+        required: true
+      model:
+        description: 'Sentence-transformers model name'
+        type: string
+        default: 'all-MiniLM-L6-v2'
+      batch-size:
+        description: 'Batch size for encoding'
+        type: number
+        default: 32
+      word-limit:
+        description: 'Max words to embed (leave empty for no limit)'
+        type: number
+        default: 0
+      no-title:
+        description: 'Exclude title from embedding'
+        type: boolean
+        default: false
+      no-summary:
+        description: 'Exclude summary from embedding'
+        type: boolean
+        default: false
+      no-text:
+        description: 'Exclude text from embedding'
+        type: boolean
+        default: false
+      load-s3:
+        description: 'Upload embedded articles to S3'
+        type: boolean
+        default: false
+      load-local:
+        description: 'Save embedded articles to local file'
+        type: boolean
+        default: false
+
+jobs:
+  compute-embeddings:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-compute-embeddings-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --with embed
+
+      - name: Build command arguments
+        id: build-args
+        run: |
+          ARGS="--input-s3-prefix ${{ inputs.input-s3-prefix }}"
+          ARGS="$ARGS --model ${{ inputs.model }}"
+          ARGS="$ARGS --batch-size ${{ inputs.batch-size }}"
+          if [ "${{ inputs.word-limit }}" -gt 0 ]; then
+            ARGS="$ARGS --word-limit ${{ inputs.word-limit }}"
+          fi
+          if [ "${{ inputs.no-title }}" = "true" ]; then
+            ARGS="$ARGS --no-title"
+          fi
+          if [ "${{ inputs.no-summary }}" = "true" ]; then
+            ARGS="$ARGS --no-summary"
+          fi
+          if [ "${{ inputs.no-text }}" = "true" ]; then
+            ARGS="$ARGS --no-text"
+          fi
+          if [ "${{ inputs.load-s3 }}" = "true" ]; then
+            ARGS="$ARGS --load-s3"
+          fi
+          if [ "${{ inputs.load-local }}" = "true" ]; then
+            ARGS="$ARGS --load-local"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Run compute_embeddings
+        env:
+          PYTHONPATH: src
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        run: poetry run python -m compute_embeddings.cli ${{ steps.build-args.outputs.args }}
+
+      - name: Upload local output
+        if: inputs.load-local
+        uses: actions/upload-artifact@v4
+        with:
+          name: embedded-articles
+          path: output/*.jsonl
+          retention-days: 7
