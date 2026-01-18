@@ -8,7 +8,7 @@ from ingest_articles.fetch_articles.fetch_article_text import (
     fetch_article_text as fetch_text,
 )
 from ingest_articles.models import ResolvedArticle
-from news_pipeline.utils.hashing import generate_article_id
+from common.hashing import generate_article_id
 
 
 logger = logging.getLogger(__name__)

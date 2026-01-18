@@ -13,7 +13,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 from cluster_articles.cluster_articles import cluster_articles
-from news_pipeline.utils.aws import build_s3_key, upload_jsonl_to_s3
+from common.aws import build_s3_key, upload_jsonl_to_s3
 
 logger = logging.getLogger(__name__)
 

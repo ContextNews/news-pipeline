@@ -1,6 +1,0 @@
-sources:
-  - bbc
-
-lookback_hours: 24
-output: local
-fetch_article_text: true

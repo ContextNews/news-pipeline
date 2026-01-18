@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 
 from ingest_articles.ingest_articles import ingest_articles
 from ingest_articles.fetch_articles.sources import RSS_FEEDS
-from news_pipeline.utils.aws import build_s3_key, upload_jsonl_to_s3, upload_articles
-from news_pipeline.utils.serialization import serialize_dataclass
+from common.aws import build_s3_key, upload_jsonl_to_s3, upload_articles
+from common.serialization import serialize_dataclass
 
 load_dotenv()
 

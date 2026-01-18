@@ -12,11 +12,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from compute_embeddings.compute_embeddings import compute_embeddings
-from news_pipeline.utils.aws import (
+from common.aws import (
     build_s3_key,
     upload_jsonl_to_s3,
 )
-from news_pipeline.utils.serialization import serialize_dataclass
+from common.serialization import serialize_dataclass
 
 load_dotenv()
 

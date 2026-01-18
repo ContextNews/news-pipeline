@@ -5,7 +5,7 @@ import re
 from typing import Any, Optional
 
 from ingest_articles.models import CleanedArticle
-from news_pipeline.utils.datetime import parse_datetime
+from common.datetime import parse_datetime
 
 logger = logging.getLogger(__name__)
 

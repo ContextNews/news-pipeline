@@ -1,5 +1,5 @@
 [tool.poetry]
-packages = [{include = "news_pipeline", from = "src"}]
+packages = [{include = "common", from = "src"}]
 
 [project]
 name = "news-pipeline"
