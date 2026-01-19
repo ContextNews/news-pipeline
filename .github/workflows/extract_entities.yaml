@@ -110,6 +110,29 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --with extract_entities
 
+      - name: Cache spaCy assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/spacy
+          key: spacy-assets-${{ runner.os }}-${{ inputs.model }}
+
+      - name: Check spaCy model
+        id: spacy-model
+        run: |
+          python - <<'PY'
+          import spacy
+          import sys
+
+          model = "${{ inputs.model }}"
+          sys.exit(0 if spacy.util.is_package(model) else 1)
+          PY
+
+      - name: Install spaCy model
+        if: steps.spacy-model.outcome == 'failure'
+        run: poetry run python -m spacy download ${{ inputs.model }}
+
       - name: Build command arguments
         id: build-args
         run: |
