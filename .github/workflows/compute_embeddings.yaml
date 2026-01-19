@@ -129,7 +129,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --with embed
+        run: poetry install --no-interaction --with compute_embeddings
 
       - name: Build command arguments
         id: build-args

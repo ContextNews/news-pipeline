@@ -108,7 +108,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --with extract
+        run: poetry install --no-interaction --with extract_entities
 
       - name: Build command arguments
         id: build-args
