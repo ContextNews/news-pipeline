@@ -47,6 +47,10 @@ pycountry = ">=24.6"
 hdbscan = ">=0.8.33"
 numpy = ">=1.26"
 
+# Generate stories service dependencies
+[tool.poetry.group.generate_stories.dependencies]
+openai = ">=1.0"
+
 # Development dependencies
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0"
