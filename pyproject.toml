@@ -13,6 +13,7 @@ requires-python = ">=3.12,<4.0"
 dependencies = [
     # Shared dependencies
     "boto3>=1.42,<2.0",
+    "context-data-schema @ git+https://github.com/ContextNews/context-data-schemas.git@main",
     "psycopg2-binary>=2.9.11,<3.0",
     "python-dotenv>=1.2,<2.0",
     "sqlalchemy>=2.0",
