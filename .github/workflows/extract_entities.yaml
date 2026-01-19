@@ -123,14 +123,15 @@ jobs:
         run: |
           poetry run python - <<'PY'
           import spacy
-          import sys
 
           model = "${{ inputs.model }}"
-          sys.exit(0 if spacy.util.is_package(model) else 1)
+          is_installed = spacy.util.is_package(model)
+          with open("${GITHUB_OUTPUT}", "a", encoding="utf-8") as handle:
+              handle.write(f"installed={str(is_installed).lower()}\n")
           PY
 
       - name: Install spaCy model
-        if: steps.spacy-model.outcome == 'failure'
+        if: steps.spacy-model.outputs.installed != 'true'
         run: poetry run python -m spacy download ${{ inputs.model }}
 
       - name: Build command arguments
