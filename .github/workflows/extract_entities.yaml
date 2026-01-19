@@ -8,7 +8,7 @@ on:
         default: ''
       model:
         type: string
-        default: 'en_core_web_sm'
+        default: 'en_core_web_trf'
       batch-size:
         type: number
         default: 32
@@ -24,9 +24,6 @@ on:
       load-rds:
         type: boolean
         default: true
-      load-local:
-        type: boolean
-        default: false
   workflow_dispatch:
     inputs:
       ingested-date:
@@ -37,7 +34,7 @@ on:
       model:
         description: 'spaCy model to use'
         type: string
-        default: 'en_core_web_sm'
+        default: 'en_core_web_trf'
       batch-size:
         description: 'Batch size for spaCy NER'
         type: number
@@ -58,10 +55,6 @@ on:
         description: 'Load entities to RDS'
         type: boolean
         default: true
-      load-local:
-        description: 'Save results to local file'
-        type: boolean
-        default: false
 
 jobs:
   extract-entities:
@@ -138,9 +131,6 @@ jobs:
           fi
           if [ "${{ inputs.load-rds }}" = "true" ]; then
             ARGS="$ARGS --load-rds"
-          fi
-          if [ "${{ inputs.load-local }}" = "true" ]; then
-            ARGS="$ARGS --load-local"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 
