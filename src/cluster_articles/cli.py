@@ -3,30 +3,21 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
 from dotenv import load_dotenv
 
 from cluster_articles.cluster_articles import cluster_articles
 from common.aws import build_s3_key, upload_jsonl_to_s3
+from common.cli_helpers import date_to_range, parse_date, save_jsonl_local, setup_logging
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-
-def _parse_ingested_date(value: str) -> date:
-    try:
-        return date.fromisoformat(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("ingested-date must be YYYY-MM-DD") from exc
 
 
 def _load_articles_with_embeddings(
@@ -38,8 +29,7 @@ def _load_articles_with_embeddings(
 
     from rds_postgres.connection import get_session
 
-    start = datetime.combine(ingested_date, datetime.min.time())
-    end = start + timedelta(days=1)
+    start, end = date_to_range(ingested_date)
 
     logger.info("Loading articles ingested from %s to %s", start.isoformat(), end.isoformat())
     with get_session() as session:
@@ -103,7 +93,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--ingested-date",
-        type=_parse_ingested_date,
+        type=lambda v: parse_date(v, "ingested-date"),
         default=datetime.now(timezone.utc).date(),
         help="UTC date (YYYY-MM-DD)",
     )
@@ -181,12 +171,10 @@ def main() -> None:
                           AND ac.clustered_at < :end
                         """
                     )
+                    delete_start, delete_end = date_to_range(args.ingested_date)
                     session.execute(
                         delete_stmt,
-                        {
-                            "start": datetime.combine(args.ingested_date, datetime.min.time()),
-                            "end": datetime.combine(args.ingested_date, datetime.min.time()) + timedelta(days=1),
-                        },
+                        {"start": delete_start, "end": delete_end},
                     )
                     session.execute(
                         text(
@@ -196,10 +184,7 @@ def main() -> None:
                               AND clustered_at < :end
                             """
                         ),
-                        {
-                            "start": datetime.combine(args.ingested_date, datetime.min.time()),
-                            "end": datetime.combine(args.ingested_date, datetime.min.time()) + timedelta(days=1),
-                        },
+                        {"start": delete_start, "end": delete_end},
                     )
                 for _, article_ids in clusters.items():
                     cluster_id = uuid4().hex
@@ -228,13 +213,7 @@ def main() -> None:
             logger.info("Saved %d clusters to RDS", len(clusters))
 
     if args.load_local:
-        output_dir = Path("output")
-        output_dir.mkdir(exist_ok=True)
-        filename = f"clustered_articles_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl"
-        filepath = output_dir / filename
-        with filepath.open("w") as f:
-            for record in records:
-                f.write(json.dumps(record, default=str, ensure_ascii=False) + "\n")
+        filepath = save_jsonl_local(records, "clustered_articles", now)
         logger.info("Saved %d clustered articles to %s", len(records), filepath)
 
 

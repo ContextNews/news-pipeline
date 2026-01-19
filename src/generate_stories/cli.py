@@ -3,31 +3,22 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
 
 from common.aws import build_s3_key, upload_jsonl_to_s3
+from common.cli_helpers import date_to_range, parse_date, save_jsonl_local, setup_logging
 from generate_stories.generate_stories import generate_story, GeneratedStoryOverview
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "gpt-4o-mini"
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-
-def _parse_clustered_date(value: str) -> date:
-    try:
-        return date.fromisoformat(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("clustered-date must be YYYY-MM-DD") from exc
 
 
 def _load_clusters_from_rds(clustered_date: date) -> list[dict[str, Any]]:
@@ -36,8 +27,7 @@ def _load_clusters_from_rds(clustered_date: date) -> list[dict[str, Any]]:
 
     from rds_postgres.connection import get_session
 
-    start = datetime.combine(clustered_date, datetime.min.time())
-    end = start + timedelta(days=1)
+    start, end = date_to_range(clustered_date)
 
     logger.info("Loading clusters from %s to %s", start.isoformat(), end.isoformat())
 
@@ -135,7 +125,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--clustered-date",
-        type=_parse_clustered_date,
+        type=lambda v: parse_date(v, "clustered-date"),
         default=datetime.now(timezone.utc).date(),
         help="UTC date (YYYY-MM-DD) of clusters to process",
     )
@@ -243,13 +233,7 @@ def main() -> None:
         logger.info("Saved %d stories to RDS", len(stories))
 
     if args.load_local:
-        output_dir = Path("output")
-        output_dir.mkdir(exist_ok=True)
-        filename = f"generated_stories_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl"
-        filepath = output_dir / filename
-        with filepath.open("w") as f:
-            for record in stories:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        filepath = save_jsonl_local(stories, "generated_stories", now)
         logger.info("Saved %d stories to %s", len(stories), filepath)
 
 

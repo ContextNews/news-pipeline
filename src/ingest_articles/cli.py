@@ -4,21 +4,20 @@ from __future__ import annotations
 
 import argparse
 import logging
-import json
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 from dotenv import load_dotenv
 
 from ingest_articles.ingest_articles import ingest_articles
 from ingest_articles.fetch_articles.sources import RSS_FEEDS
 from common.aws import build_s3_key, upload_jsonl_to_s3, upload_articles
+from common.cli_helpers import save_jsonl_local, setup_logging
 from common.serialization import serialize_dataclass
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -74,14 +73,8 @@ def main() -> None:
         logger.info("Uploaded %d cleaned articles to s3://%s/%s", len(ingested_articles), bucket, key)
 
     if args.load_local:
-        output_dir = Path("output")
-        output_dir.mkdir(exist_ok=True)
-        filename = f"ingested_articles_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl"
-        filepath = output_dir / filename
         records = [serialize_dataclass(article) for article in ingested_articles]
-        with filepath.open("w") as f:
-            for record in records:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        filepath = save_jsonl_local(records, "ingested_articles", now)
         logger.info("Saved %d cleaned articles to %s", len(ingested_articles), filepath)
 
     if args.load_rds:

@@ -3,24 +3,20 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
 
 from compute_embeddings.compute_embeddings import compute_embeddings
-from common.aws import (
-    build_s3_key,
-    upload_jsonl_to_s3,
-)
+from common.aws import build_s3_key, upload_jsonl_to_s3
+from common.cli_helpers import date_to_range, parse_date, save_jsonl_local, setup_logging
 from common.serialization import serialize_dataclass
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+setup_logging()
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
@@ -32,8 +28,7 @@ def _load_articles_from_rds(ingested_date: date, model: str, overwrite: bool) ->
 
     from rds_postgres.connection import get_session
 
-    start = datetime.combine(ingested_date, datetime.min.time())
-    end = start + timedelta(days=1)
+    start, end = date_to_range(ingested_date)
 
     logger.info("Loading articles ingested from %s to %s", start.isoformat(), end.isoformat())
     with get_session() as session:
@@ -69,20 +64,13 @@ def _load_articles_from_rds(ingested_date: date, model: str, overwrite: bool) ->
     return articles
 
 
-def _parse_ingested_date(value: str) -> date:
-    try:
-        return date.fromisoformat(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("ingested-date must be YYYY-MM-DD") from exc
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
 
     # Input options
     parser.add_argument(
         "--ingested-date",
-        type=_parse_ingested_date,
+        type=lambda v: parse_date(v, "ingested-date"),
         default=date.today(),
         help="UTC date (YYYY-MM-DD)",
     )
@@ -186,14 +174,8 @@ def main() -> None:
         logger.info("Upserted %d embeddings in RDS (%d updated, %d inserted)", updated + inserted, updated, inserted)
 
     if args.load_local:
-        output_dir = Path("output")
-        output_dir.mkdir(exist_ok=True)
-        filename = f"embedded_articles_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl"
-        filepath = output_dir / filename
         records = [serialize_dataclass(article) for article in embedded_articles]
-        with filepath.open("w") as f:
-            for record in records:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        filepath = save_jsonl_local(records, "embedded_articles", now)
         logger.info("Saved %d embedded articles to %s", len(embedded_articles), filepath)
 
 
