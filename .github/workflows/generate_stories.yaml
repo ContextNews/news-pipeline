@@ -1,0 +1,115 @@
+name: Generate Stories
+
+on:
+  workflow_call:
+    inputs:
+      clustered-date:
+        type: string
+        default: ''
+      model:
+        type: string
+        default: 'gpt-4o-mini'
+      load-s3:
+        type: boolean
+        default: true
+      load-rds:
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      clustered-date:
+        description: 'UTC date of clusters to process (YYYY-MM-DD)'
+        type: string
+        required: false
+        default: ''
+      model:
+        description: 'OpenAI model to use'
+        type: string
+        default: 'gpt-4o-mini'
+      load-s3:
+        description: 'Load stories to S3'
+        type: boolean
+        default: true
+      load-rds:
+        description: 'Load stories to RDS'
+        type: boolean
+        default: true
+
+jobs:
+  generate-stories:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Set up SSH tunnel
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BASTION_SSH_KEY }}" > ~/.ssh/bastion_key
+          chmod 600 ~/.ssh/bastion_key
+
+          ssh-keyscan -H ${{ secrets.BASTION_IP }} >> ~/.ssh/known_hosts 2>&1
+
+          ssh -f -N -L 5432:${{ secrets.RDS_ENDPOINT }}:5432 \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=60 \
+            -i ~/.ssh/bastion_key \
+            ec2-user@${{ secrets.BASTION_IP }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-generate-stories-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --with generate_stories
+
+      - name: Build command arguments
+        id: build-args
+        run: |
+          if [ -n "${{ inputs.clustered-date }}" ]; then
+            ARGS="--clustered-date ${{ inputs.clustered-date }}"
+          else
+            ARGS="--clustered-date $(date -u +%F)"
+          fi
+          ARGS="$ARGS --model ${{ inputs.model }}"
+          if [ "${{ inputs.load-s3 }}" = "true" ]; then
+            ARGS="$ARGS --load-s3"
+          fi
+          if [ "${{ inputs.load-rds }}" = "true" ]; then
+            ARGS="$ARGS --load-rds"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Run generate_stories
+        env:
+          PYTHONPATH: src
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD }}@localhost:5432/contextdb
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: poetry run python -m generate_stories ${{ steps.build-args.outputs.args }}
