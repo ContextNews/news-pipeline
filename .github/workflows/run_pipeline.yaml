@@ -99,36 +99,36 @@ jobs:
     uses: ./.github/workflows/ingest_articles.yaml
     secrets: inherit
     with:
-      lookback-hours: ${{ inputs.ingest-lookback-hours != '' && fromJSON(inputs.ingest-lookback-hours) || 12 }}
-      sources: ${{ inputs.ingest-sources }}
-      load-s3: ${{ inputs.ingest-load-s3 == '' && true || inputs.ingest-load-s3 }}
-      load-rds: ${{ inputs.ingest-load-rds == '' && true || inputs.ingest-load-rds }}
+      lookback-hours: ${{ inputs.ingest-lookback-hours || 12 }}
+      sources: ${{ inputs.ingest-sources || 'all' }}
+      load-s3: ${{ inputs.ingest-load-s3 != false }}
+      load-rds: ${{ inputs.ingest-load-rds != false }}
 
   embed:
     needs: ingest
     uses: ./.github/workflows/compute_embeddings.yaml
     secrets: inherit
     with:
-      ingested-date: ${{ inputs.embed-ingested-date }}
-      model: ${{ inputs.embed-model }}
-      batch-size: ${{ inputs.embed-batch-size != '' && fromJSON(inputs.embed-batch-size) || 32 }}
-      word-limit: ${{ inputs.embed-word-limit != '' && fromJSON(inputs.embed-word-limit) || 300 }}
-      no-title: ${{ inputs.embed-no-title == '' && false || inputs.embed-no-title }}
-      no-summary: ${{ inputs.embed-no-summary == '' && false || inputs.embed-no-summary }}
-      no-text: ${{ inputs.embed-no-text == '' && false || inputs.embed-no-text }}
-      overwrite: ${{ inputs.embed-overwrite == '' && false || inputs.embed-overwrite }}
-      load-s3: ${{ inputs.embed-load-s3 == '' && true || inputs.embed-load-s3 }}
-      load-rds: ${{ inputs.embed-load-rds == '' && true || inputs.embed-load-rds }}
+      ingested-date: ${{ inputs.embed-ingested-date || '' }}
+      model: ${{ inputs.embed-model || 'all-MiniLM-L6-v2' }}
+      batch-size: ${{ inputs.embed-batch-size || 32 }}
+      word-limit: ${{ inputs.embed-word-limit || 300 }}
+      no-title: ${{ inputs.embed-no-title == true }}
+      no-summary: ${{ inputs.embed-no-summary == true }}
+      no-text: ${{ inputs.embed-no-text == true }}
+      overwrite: ${{ inputs.embed-overwrite == true }}
+      load-s3: ${{ inputs.embed-load-s3 != false }}
+      load-rds: ${{ inputs.embed-load-rds != false }}
 
   cluster:
     needs: embed
     uses: ./.github/workflows/cluster_articles.yaml
     secrets: inherit
     with:
-      ingested-date: ${{ inputs.cluster-ingested-date }}
-      embedding-model: ${{ inputs.cluster-embedding-model }}
-      min-cluster-size: ${{ inputs.cluster-min-cluster-size != '' && fromJSON(inputs.cluster-min-cluster-size) || 2 }}
-      min-samples: ${{ inputs.cluster-min-samples != '' && fromJSON(inputs.cluster-min-samples) || 0 }}
-      load-s3: ${{ inputs.cluster-load-s3 == '' && true || inputs.cluster-load-s3 }}
-      load-rds: ${{ inputs.cluster-load-rds == '' && true || inputs.cluster-load-rds }}
-      overwrite-clusters: ${{ inputs.cluster-overwrite-clusters == '' && true || inputs.cluster-overwrite-clusters }}
+      ingested-date: ${{ inputs.cluster-ingested-date || '' }}
+      embedding-model: ${{ inputs.cluster-embedding-model || 'all-MiniLM-L6-v2' }}
+      min-cluster-size: ${{ inputs.cluster-min-cluster-size || 2 }}
+      min-samples: ${{ inputs.cluster-min-samples || 0 }}
+      load-s3: ${{ inputs.cluster-load-s3 != false }}
+      load-rds: ${{ inputs.cluster-load-rds != false }}
+      overwrite-clusters: ${{ inputs.cluster-overwrite-clusters != false }}
