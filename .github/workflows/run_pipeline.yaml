@@ -14,14 +14,6 @@ on:
         description: 'Sources'
         type: string
         default: 'all'
-      ingest-load-s3:
-        description: 'Load ingested articles to S3'
-        type: boolean
-        default: true
-      ingest-load-rds:
-        description: 'Load ingested articles to RDS'
-        type: boolean
-        default: true
       # Embed inputs
       embed-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
@@ -55,14 +47,6 @@ on:
         description: 'Re-embed articles even if already embedded for this model'
         type: boolean
         default: false
-      embed-load-s3:
-        description: 'Load articles to S3'
-        type: boolean
-        default: true
-      embed-load-rds:
-        description: 'Load articles to RDS'
-        type: boolean
-        default: true
       # Extract entities inputs
       entities-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
@@ -84,14 +68,6 @@ on:
         description: 'Re-extract entities for articles with existing entities'
         type: boolean
         default: false
-      entities-load-s3:
-        description: 'Load entities to S3'
-        type: boolean
-        default: true
-      entities-load-rds:
-        description: 'Load entities to RDS'
-        type: boolean
-        default: true
       # Cluster inputs
       cluster-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
@@ -109,14 +85,6 @@ on:
         description: 'Minimum samples (leave empty for default)'
         type: number
         default: 0
-      cluster-load-s3:
-        description: 'Load to S3'
-        type: boolean
-        default: true
-      cluster-load-rds:
-        description: 'Load to RDS'
-        type: boolean
-        default: true
       cluster-overwrite-clusters:
         description: 'Overwrite existing clusters'
         type: boolean
@@ -130,14 +98,6 @@ on:
         description: 'OpenAI model to use'
         type: string
         default: 'gpt-4o-mini'
-      stories-load-s3:
-        description: 'Load stories to S3'
-        type: boolean
-        default: true
-      stories-load-rds:
-        description: 'Load stories to RDS'
-        type: boolean
-        default: true
 
 permissions:
   id-token: write
@@ -150,8 +110,8 @@ jobs:
     with:
       lookback-hours: ${{ fromJSON(inputs.ingest-lookback-hours || '12') }}
       sources: ${{ inputs.ingest-sources || 'all' }}
-      load-s3: ${{ inputs.ingest-load-s3 != false }}
-      load-rds: ${{ inputs.ingest-load-rds != false }}
+      load-s3: true
+      load-rds: true
 
   # Embed and extract-entities run in parallel after ingest
   embed:
@@ -167,8 +127,8 @@ jobs:
       no-summary: ${{ inputs.embed-no-summary == true }}
       no-text: ${{ inputs.embed-no-text == true }}
       overwrite: ${{ inputs.embed-overwrite == true }}
-      load-s3: ${{ inputs.embed-load-s3 != false }}
-      load-rds: ${{ inputs.embed-load-rds != false }}
+      load-s3: true
+      load-rds: true
 
   extract-entities:
     needs: ingest
@@ -180,8 +140,8 @@ jobs:
       batch-size: ${{ fromJSON(inputs.entities-batch-size || '32') }}
       word-limit: ${{ fromJSON(inputs.entities-word-limit || '300') }}
       overwrite: ${{ inputs.entities-overwrite == true }}
-      load-s3: ${{ inputs.entities-load-s3 != false }}
-      load-rds: ${{ inputs.entities-load-rds != false }}
+      load-s3: true
+      load-rds: true
 
   # Cluster waits for both embed and extract-entities
   cluster:
@@ -193,8 +153,8 @@ jobs:
       embedding-model: ${{ inputs.cluster-embedding-model || 'all-MiniLM-L6-v2' }}
       min-cluster-size: ${{ fromJSON(inputs.cluster-min-cluster-size || '2') }}
       min-samples: ${{ fromJSON(inputs.cluster-min-samples || '0') }}
-      load-s3: ${{ inputs.cluster-load-s3 != false }}
-      load-rds: ${{ inputs.cluster-load-rds != false }}
+      load-s3: true
+      load-rds: true
       overwrite-clusters: ${{ inputs.cluster-overwrite-clusters != false }}
 
   # Generate stories after clustering
@@ -205,5 +165,5 @@ jobs:
     with:
       clustered-date: ${{ inputs.stories-clustered-date || '' }}
       model: ${{ inputs.stories-model || 'gpt-4o-mini' }}
-      load-s3: ${{ inputs.stories-load-s3 != false }}
-      load-rds: ${{ inputs.stories-load-rds != false }}
+      load-s3: true
+      load-rds: true
