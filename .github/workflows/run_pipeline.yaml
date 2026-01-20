@@ -5,6 +5,7 @@ on:
     - cron: "0 6,18 * * *"
   workflow_dispatch:
     inputs:
+      # Ingest inputs
       ingest-lookback-hours:
         description: 'Number of hours to look back for articles'
         type: number
@@ -21,6 +22,7 @@ on:
         description: 'Load ingested articles to RDS'
         type: boolean
         default: true
+      # Embed inputs
       embed-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
         type: string
@@ -61,6 +63,36 @@ on:
         description: 'Load articles to RDS'
         type: boolean
         default: true
+      # Extract entities inputs
+      entities-ingested-date:
+        description: 'UTC date to load from RDS (YYYY-MM-DD)'
+        type: string
+        default: ''
+      entities-model:
+        description: 'spaCy model to use'
+        type: string
+        default: 'en_core_web_trf'
+      entities-batch-size:
+        description: 'Batch size for spaCy NER'
+        type: number
+        default: 32
+      entities-word-limit:
+        description: 'Entity extraction word limit'
+        type: number
+        default: 300
+      entities-overwrite:
+        description: 'Re-extract entities for articles with existing entities'
+        type: boolean
+        default: false
+      entities-load-s3:
+        description: 'Load entities to S3'
+        type: boolean
+        default: true
+      entities-load-rds:
+        description: 'Load entities to RDS'
+        type: boolean
+        default: true
+      # Cluster inputs
       cluster-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
         type: string
@@ -89,6 +121,23 @@ on:
         description: 'Overwrite existing clusters'
         type: boolean
         default: true
+      # Generate stories inputs
+      stories-clustered-date:
+        description: 'UTC date of clusters to process (YYYY-MM-DD)'
+        type: string
+        default: ''
+      stories-model:
+        description: 'OpenAI model to use'
+        type: string
+        default: 'gpt-4o-mini'
+      stories-load-s3:
+        description: 'Load stories to S3'
+        type: boolean
+        default: true
+      stories-load-rds:
+        description: 'Load stories to RDS'
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
@@ -104,6 +153,7 @@ jobs:
       load-s3: ${{ inputs.ingest-load-s3 != false }}
       load-rds: ${{ inputs.ingest-load-rds != false }}
 
+  # Embed and extract-entities run in parallel after ingest
   embed:
     needs: ingest
     uses: ./.github/workflows/compute_embeddings.yaml
@@ -120,8 +170,22 @@ jobs:
       load-s3: ${{ inputs.embed-load-s3 != false }}
       load-rds: ${{ inputs.embed-load-rds != false }}
 
+  extract-entities:
+    needs: ingest
+    uses: ./.github/workflows/extract_entities.yaml
+    secrets: inherit
+    with:
+      ingested-date: ${{ inputs.entities-ingested-date || '' }}
+      model: ${{ inputs.entities-model || 'en_core_web_trf' }}
+      batch-size: ${{ fromJSON(inputs.entities-batch-size || '32') }}
+      word-limit: ${{ fromJSON(inputs.entities-word-limit || '300') }}
+      overwrite: ${{ inputs.entities-overwrite == true }}
+      load-s3: ${{ inputs.entities-load-s3 != false }}
+      load-rds: ${{ inputs.entities-load-rds != false }}
+
+  # Cluster waits for both embed and extract-entities
   cluster:
-    needs: embed
+    needs: [embed, extract-entities]
     uses: ./.github/workflows/cluster_articles.yaml
     secrets: inherit
     with:
@@ -132,3 +196,14 @@ jobs:
       load-s3: ${{ inputs.cluster-load-s3 != false }}
       load-rds: ${{ inputs.cluster-load-rds != false }}
       overwrite-clusters: ${{ inputs.cluster-overwrite-clusters != false }}
+
+  # Generate stories after clustering
+  generate-stories:
+    needs: cluster
+    uses: ./.github/workflows/generate_stories.yaml
+    secrets: inherit
+    with:
+      clustered-date: ${{ inputs.stories-clustered-date || '' }}
+      model: ${{ inputs.stories-model || 'gpt-4o-mini' }}
+      load-s3: ${{ inputs.stories-load-s3 != false }}
+      load-rds: ${{ inputs.stories-load-rds != false }}
