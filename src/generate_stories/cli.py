@@ -117,6 +117,10 @@ def _build_story_record(
         "title": story.title,
         "summary": story.summary,
         "key_points": story.key_points,
+        "quotes": story.quotes,
+        "sub_stories": story.sub_stories,
+        "location": story.location,
+        "noise_article_ids": story.noise_article_ids,
         "generated_at": generated_at.isoformat(),
     }
 
@@ -157,7 +161,7 @@ def main() -> None:
         logger.info("Generating story for cluster %s with %d articles", cluster_id, len(articles))
         try:
             story = generate_story(articles, model=args.model)
-            article_ids = [article["id"] for article in articles]
+            article_ids = story.article_ids or [article["id"] for article in articles]
             record = _build_story_record(cluster_id, article_ids, story, now)
             stories.append(record)
             logger.info("Generated story: %s", story.title)

@@ -1,11 +1,8 @@
 from dataclasses import dataclass
-import json
-import os
+from datetime import date, datetime
 from typing import Any
 
-from openai import OpenAI
-
-from generate_stories.instructions import GENERATE_OVERVIEW_INSTRUCTIONS
+from cronkite import Cronkite, CronkiteConfig
 
 
 @dataclass
@@ -13,50 +10,52 @@ class GeneratedStoryOverview:
     title: str
     summary: str
     key_points: list[str]
+    article_ids: list[str]
+    noise_article_ids: list[str]
+    quotes: list[dict[str, Any]]
+    sub_stories: list[dict[str, Any]]
+    location: dict[str, Any] | None
 
 
-def _format_cluster_for_prompt(cluster: list[dict[str, Any]]) -> str:
-    """Format a cluster of articles into a text block for the LLM prompt."""
-    lines = []
-    for i, article in enumerate(cluster, 1):
-        title = article.get("title", "")
-        source = article.get("source", "")
-        summary = article.get("summary", "")
-        lines.append(f"Article {i}:")
-        lines.append(f"  Source: {source}")
-        lines.append(f"  Title: {title}")
-        if summary:
-            lines.append(f"  Summary: {summary}")
-        lines.append("")
-    return "\n".join(lines)
+def _normalize_articles_for_cronkite(
+    cluster: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    normalized = []
+    for article in cluster:
+        published_at = article.get("published_at")
+        if isinstance(published_at, (datetime, date)):
+            published_at = published_at.isoformat()
+        normalized.append({
+            **article,
+            "published_at": published_at,
+        })
+    return normalized
 
 
 def generate_story_overview(
     cluster: list[dict[str, Any]],
-    instructions: str,
     model: str = "gpt-4o-mini",
 ) -> GeneratedStoryOverview:
-    """Generate a story overview from a cluster of articles using an LLM."""
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-    articles_text = _format_cluster_for_prompt(cluster)
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": instructions},
-            {"role": "user", "content": articles_text},
-        ],
-        response_format={"type": "json_object"},
+    """Generate a story overview from a cluster of articles using Cronkite."""
+    config = CronkiteConfig(
+        group_articles=False,
+        extract_quotes=False,
+        generate_substories=False,
     )
-
-    content = response.choices[0].message.content
-    data = json.loads(content)
+    cronkite = Cronkite(model=model, config=config)
+    normalized_cluster = _normalize_articles_for_cronkite(cluster)
+    data = cronkite.generate_story(normalized_cluster)
+    summary = data.get("summary", "")
 
     return GeneratedStoryOverview(
-        title=data["title"],
-        summary=data["summary"],
-        key_points=data["key_points"],
+        title=data.get("title", ""),
+        summary=summary,
+        key_points=list(data.get("key_points") or []),
+        article_ids=list(data.get("article_ids") or []),
+        noise_article_ids=list(data.get("noise_article_ids") or []),
+        quotes=list(data.get("quotes") or []),
+        sub_stories=list(data.get("sub_stories") or []),
+        location=data.get("location"),
     )
 
 
@@ -75,7 +74,12 @@ def generate_story(
     """Generate a story overview from a single cluster of related articles."""
     story_overview = generate_story_overview(
         cluster,
-        instructions=GENERATE_OVERVIEW_INSTRUCTIONS,
         model=model,
     )
     return story_overview
+
+def filter_artice_cluster(
+    cluster: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    filtered_cluster = []
+    return filtered_cluster
