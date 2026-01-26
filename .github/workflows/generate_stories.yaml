@@ -3,7 +3,7 @@ name: Generate Stories
 on:
   workflow_call:
     inputs:
-      clustered-date:
+      cluster-period:
         type: string
         default: ''
       model:
@@ -20,8 +20,8 @@ on:
         default: true
   workflow_dispatch:
     inputs:
-      clustered-date:
-        description: 'UTC date of clusters to process (YYYY-MM-DD)'
+      cluster-period:
+        description: 'UTC cluster period to process (YYYY-MM-DD)'
         type: string
         required: false
         default: ''
@@ -99,10 +99,10 @@ jobs:
       - name: Build command arguments
         id: build-args
         run: |
-          if [ -n "${{ inputs.clustered-date }}" ]; then
-            ARGS="--clustered-date ${{ inputs.clustered-date }}"
+          if [ -n "${{ inputs.cluster-period }}" ]; then
+            ARGS="--cluster-period ${{ inputs.cluster-period }}"
           else
-            ARGS="--clustered-date $(date -u +%F)"
+            ARGS="--cluster-period $(date -u +%F)"
           fi
           ARGS="$ARGS --model ${{ inputs.model }}"
           if [ "${{ inputs.load-s3 }}" = "true" ]; then

@@ -90,8 +90,8 @@ on:
         type: boolean
         default: true
       # Generate stories inputs
-      stories-clustered-date:
-        description: 'UTC date of clusters to process (YYYY-MM-DD)'
+      stories-cluster-period:
+        description: 'UTC cluster period to process (YYYY-MM-DD)'
         type: string
         default: ''
       stories-model:
@@ -167,7 +167,7 @@ jobs:
     uses: ./.github/workflows/generate_stories.yaml
     secrets: inherit
     with:
-      clustered-date: ${{ inputs.stories-clustered-date || '' }}
+      cluster-period: ${{ inputs.stories-cluster-period || '' }}
       model: ${{ inputs.stories-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true

@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "gpt-4o-mini"
 
 
-def _load_clusters_from_rds(clustered_date: date) -> list[dict[str, Any]]:
-    """Load article clusters and their articles from RDS for a specific clustered date (UTC)."""
+def _load_clusters_from_rds(cluster_period: date) -> list[dict[str, Any]]:
+    """Load article clusters and their articles from RDS for a specific cluster period (UTC)."""
     from sqlalchemy import text
 
     from rds_postgres.connection import get_session
 
-    start, end = date_to_range(clustered_date)
+    start, end = date_to_range(cluster_period)
 
     logger.info("Loading clusters from %s to %s", start.isoformat(), end.isoformat())
 
@@ -35,10 +35,10 @@ def _load_clusters_from_rds(clustered_date: date) -> list[dict[str, Any]]:
         # First, get all clusters for the date
         clusters_stmt = text(
             """
-            SELECT article_cluster_id, clustered_at
+            SELECT article_cluster_id, cluster_period
             FROM article_clusters
-            WHERE clustered_at >= :start
-              AND clustered_at < :end
+            WHERE cluster_period >= :start
+              AND cluster_period < :end
             """
         )
         cluster_results = session.execute(
@@ -95,7 +95,7 @@ def _load_clusters_from_rds(clustered_date: date) -> list[dict[str, Any]]:
         if cluster_id in clusters_map:
             clusters.append({
                 "cluster_id": cluster_id,
-                "clustered_at": cluster_row["clustered_at"],
+                "cluster_period": cluster_row["cluster_period"],
                 "articles": clusters_map[cluster_id],
             })
 
@@ -128,10 +128,10 @@ def _build_story_record(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--clustered-date",
-        type=lambda v: parse_date(v, "clustered-date"),
+        "--cluster-period",
+        type=lambda v: parse_date(v, "cluster-period"),
         default=datetime.now(timezone.utc).date(),
-        help="UTC date (YYYY-MM-DD) of clusters to process",
+        help="UTC date (YYYY-MM-DD) of cluster period to process",
     )
     parser.add_argument(
         "--model",
@@ -145,15 +145,15 @@ def main() -> None:
         "--overwrite-stories",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Overwrite existing stories for the clustered date",
+        help="Overwrite existing stories for the cluster period",
     )
     args = parser.parse_args()
 
     load_dotenv()
 
-    clusters = _load_clusters_from_rds(args.clustered_date)
+    clusters = _load_clusters_from_rds(args.cluster_period)
     if not clusters:
-        logger.warning("No clusters found for date %s", args.clustered_date)
+        logger.warning("No clusters found for date %s", args.cluster_period)
         return
 
     # Generate stories for each cluster
@@ -198,7 +198,7 @@ def main() -> None:
 
         with get_session() as session:
             if args.overwrite_stories:
-                delete_start, delete_end = date_to_range(args.clustered_date)
+                delete_start, delete_end = date_to_range(args.cluster_period)
                 # Delete from junction table first (foreign key constraint)
                 session.execute(
                     text(
@@ -226,7 +226,7 @@ def main() -> None:
                 )
                 logger.info(
                     "Deleted existing stories for %s",
-                    args.clustered_date.isoformat(),
+                    args.cluster_period.isoformat(),
                 )
 
             # Insert stories
