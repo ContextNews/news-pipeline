@@ -71,7 +71,7 @@ def main() -> None:
     parser.add_argument(
         "--ingested-date",
         type=lambda v: parse_date(v, "ingested-date"),
-        default=date.today(),
+        default=datetime.now(timezone.utc).date(),
         help="UTC date (YYYY-MM-DD)",
     )
     parser.add_argument(

@@ -137,7 +137,7 @@ jobs:
           if [ -n "${{ inputs.ingested-date }}" ]; then
             ARGS="--ingested-date ${{ inputs.ingested-date }}"
           else
-            ARGS="--ingested-date $(TZ=Europe/London date +%F)"
+            ARGS="--ingested-date $(date -u +%F)"
           fi
           ARGS="$ARGS --model ${{ inputs.model }}"
           ARGS="$ARGS --batch-size ${{ inputs.batch-size }}"

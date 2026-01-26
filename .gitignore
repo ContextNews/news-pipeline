@@ -22,6 +22,7 @@ dist/
 collected_readmes/
 output/
 service_tests/output/
+scripts/temp/
 **/data/
 
 # IDE
