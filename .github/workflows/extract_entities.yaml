@@ -3,7 +3,7 @@ name: Extract Entities
 on:
   workflow_call:
     inputs:
-      ingested-date:
+      published-date:
         type: string
         default: ''
       model:
@@ -26,8 +26,8 @@ on:
         default: true
   workflow_dispatch:
     inputs:
-      ingested-date:
-        description: 'UTC date to load from RDS (YYYY-MM-DD)'
+      published-date:
+        description: 'Extract entities from articles published on this date (UTC, YYYY-MM-DD)'
         type: string
         required: false
         default: ''
@@ -137,10 +137,10 @@ jobs:
       - name: Build command arguments
         id: build-args
         run: |
-          if [ -n "${{ inputs.ingested-date }}" ]; then
-            ARGS="--ingested-date ${{ inputs.ingested-date }}"
+          if [ -n "${{ inputs.published-date }}" ]; then
+            ARGS="--published-date ${{ inputs.published-date }}"
           else
-            ARGS="--ingested-date $(date -u +%F)"
+            ARGS="--published-date $(date -u +%F)"
           fi
           ARGS="$ARGS --model ${{ inputs.model }}"
           ARGS="$ARGS --batch-size ${{ inputs.batch-size }}"

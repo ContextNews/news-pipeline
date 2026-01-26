@@ -3,7 +3,7 @@ name: Compute Embeddings
 on:
   workflow_call:
     inputs:
-      ingested-date:
+      published-date:
         type: string
         default: ''
       model:
@@ -35,8 +35,8 @@ on:
         default: true
   workflow_dispatch:
     inputs:
-      ingested-date:
-        description: 'Embed articles for date (YYYY-MM-DD)'
+      published-date:
+        description: 'Embed articles published on this date (YYYY-MM-DD)'
         type: string
         required: false
         default: ''
@@ -134,10 +134,10 @@ jobs:
       - name: Build command arguments
         id: build-args
         run: |
-          if [ -n "${{ inputs.ingested-date }}" ]; then
-            ARGS="--ingested-date ${{ inputs.ingested-date }}"
+          if [ -n "${{ inputs.published-date }}" ]; then
+            ARGS="--published-date ${{ inputs.published-date }}"
           else
-            ARGS="--ingested-date $(date -u +%F)"
+            ARGS="--published-date $(date -u +%F)"
           fi
           ARGS="$ARGS --model ${{ inputs.model }}"
           ARGS="$ARGS --batch-size ${{ inputs.batch-size }}"

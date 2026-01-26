@@ -15,8 +15,8 @@ on:
         type: string
         default: 'all'
       # Embed inputs
-      embed-ingested-date:
-        description: 'UTC date to load from RDS (YYYY-MM-DD)'
+      embed-published-date:
+        description: 'Embed articles published on this date (UTC, YYYY-MM-DD)'
         type: string
         default: ''
       embed-model:
@@ -48,8 +48,8 @@ on:
         type: boolean
         default: false
       # Extract entities inputs
-      entities-ingested-date:
-        description: 'UTC date to load from RDS (YYYY-MM-DD)'
+      entities-published-date:
+        description: 'Extract entities from articles published on this date (UTC, YYYY-MM-DD)'
         type: string
         default: ''
       entities-model:
@@ -123,7 +123,7 @@ jobs:
     uses: ./.github/workflows/compute_embeddings.yaml
     secrets: inherit
     with:
-      ingested-date: ${{ inputs.embed-ingested-date || '' }}
+      published-date: ${{ inputs.embed-published-date || '' }}
       model: ${{ inputs.embed-model || 'all-MiniLM-L6-v2' }}
       batch-size: ${{ fromJSON(inputs.embed-batch-size || '32') }}
       word-limit: ${{ fromJSON(inputs.embed-word-limit || '300') }}
@@ -139,7 +139,7 @@ jobs:
     uses: ./.github/workflows/extract_entities.yaml
     secrets: inherit
     with:
-      ingested-date: ${{ inputs.entities-ingested-date || '' }}
+      published-date: ${{ inputs.entities-published-date || '' }}
       model: ${{ inputs.entities-model || 'en_core_web_trf' }}
       batch-size: ${{ fromJSON(inputs.entities-batch-size || '32') }}
       word-limit: ${{ fromJSON(inputs.entities-word-limit || '300') }}

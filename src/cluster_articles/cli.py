@@ -159,7 +159,7 @@ def main() -> None:
         if not clusters:
             logger.warning("No non-noise clusters to save")
         else:
-            clustered_at = datetime.now(timezone.utc)
+            cluster_period = datetime.combine(args.ingested_date, datetime.min.time(), tzinfo=timezone.utc)
             with get_session() as session:
                 if args.overwrite_clusters:
                     delete_stmt = text(
@@ -167,8 +167,8 @@ def main() -> None:
                         DELETE FROM article_cluster_articles aca
                         USING article_clusters ac
                         WHERE aca.article_cluster_id = ac.article_cluster_id
-                          AND ac.clustered_at >= :start
-                          AND ac.clustered_at < :end
+                          AND ac.cluster_period >= :start
+                          AND ac.cluster_period < :end
                         """
                     )
                     delete_start, delete_end = date_to_range(args.ingested_date)
@@ -180,8 +180,8 @@ def main() -> None:
                         text(
                             """
                             DELETE FROM article_clusters
-                            WHERE clustered_at >= :start
-                              AND clustered_at < :end
+                            WHERE cluster_period >= :start
+                              AND cluster_period < :end
                             """
                         ),
                         {"start": delete_start, "end": delete_end},
@@ -191,11 +191,11 @@ def main() -> None:
                     session.execute(
                         text(
                             """
-                            INSERT INTO article_clusters (article_cluster_id, clustered_at)
-                            VALUES (:cluster_id, :clustered_at)
+                            INSERT INTO article_clusters (article_cluster_id, cluster_period)
+                            VALUES (:cluster_id, :cluster_period)
                             """
                         ),
-                        {"cluster_id": cluster_id, "clustered_at": clustered_at},
+                        {"cluster_id": cluster_id, "cluster_period": cluster_period},
                     )
                     session.execute(
                         text(

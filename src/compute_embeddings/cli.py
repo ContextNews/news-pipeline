@@ -22,15 +22,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 
 
-def _load_articles_from_rds(ingested_date: date, model: str, overwrite: bool) -> list[dict]:
-    """Load articles from RDS for a specific ingested date (UTC)."""
+def _load_articles_from_rds(published_date: date, model: str, overwrite: bool) -> list[dict]:
+    """Load articles from RDS for a specific published date (UTC)."""
     from sqlalchemy import text
 
     from rds_postgres.connection import get_session
 
-    start, end = date_to_range(ingested_date)
+    start, end = date_to_range(published_date)
 
-    logger.info("Loading articles ingested from %s to %s", start.isoformat(), end.isoformat())
+    logger.info("Loading articles published from %s to %s", start.isoformat(), end.isoformat())
     with get_session() as session:
         stmt = text(
             """
@@ -44,8 +44,8 @@ def _load_articles_from_rds(ingested_date: date, model: str, overwrite: bool) ->
                 a.ingested_at,
                 a.text
             FROM articles a
-            WHERE a.ingested_at >= :start
-              AND a.ingested_at < :end
+            WHERE a.published_at >= :start
+              AND a.published_at < :end
               AND (:overwrite OR NOT EXISTS (
                     SELECT 1
                     FROM article_embeddings e
@@ -69,10 +69,10 @@ def main() -> None:
 
     # Input options
     parser.add_argument(
-        "--ingested-date",
-        type=lambda v: parse_date(v, "ingested-date"),
+        "--published-date",
+        type=lambda v: parse_date(v, "published-date"),
         default=datetime.now(timezone.utc).date(),
-        help="UTC date (YYYY-MM-DD)",
+        help="Embed articles published on this date (UTC, YYYY-MM-DD)",
     )
     parser.add_argument(
         "--overwrite",
@@ -98,7 +98,7 @@ def main() -> None:
     args = parser.parse_args()
 
     load_dotenv()
-    articles = _load_articles_from_rds(args.ingested_date, args.model, args.overwrite)
+    articles = _load_articles_from_rds(args.published_date, args.model, args.overwrite)
 
     if not articles:
         logger.warning("No articles to process")
