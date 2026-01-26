@@ -107,6 +107,7 @@ def _build_story_record(
     cluster_id: str,
     article_ids: list[str],
     story: GeneratedStoryOverview,
+    story_period: datetime,
     generated_at: datetime,
 ) -> dict[str, Any]:
     """Build a record for a generated story."""
@@ -121,6 +122,7 @@ def _build_story_record(
         "sub_stories": story.sub_stories,
         "location": story.location,
         "noise_article_ids": story.noise_article_ids,
+        "story_period": story_period.isoformat(),
         "generated_at": generated_at.isoformat(),
     }
 
@@ -163,12 +165,13 @@ def main() -> None:
     for cluster in clusters:
         cluster_id = cluster["cluster_id"]
         articles = cluster["articles"]
+        cluster_period = cluster["cluster_period"]
 
         logger.info("Generating story for cluster %s with %d articles", cluster_id, len(articles))
         try:
             story = generate_story(articles, model=args.model)
             article_ids = story.article_ids or [article["id"] for article in articles]
-            record = _build_story_record(cluster_id, article_ids, story, now)
+            record = _build_story_record(cluster_id, article_ids, story, cluster_period, now)
             stories.append(record)
             logger.info("Generated story: %s", story.title)
         except Exception as e:
@@ -206,8 +209,8 @@ def main() -> None:
                         DELETE FROM article_stories
                         WHERE story_id IN (
                             SELECT id FROM stories
-                            WHERE generated_at >= :start
-                              AND generated_at < :end
+                            WHERE story_period >= :start
+                              AND story_period < :end
                         )
                         """
                     ),
@@ -218,8 +221,8 @@ def main() -> None:
                     text(
                         """
                         DELETE FROM stories
-                        WHERE generated_at >= :start
-                          AND generated_at < :end
+                        WHERE story_period >= :start
+                          AND story_period < :end
                         """
                     ),
                     {"start": delete_start, "end": delete_end},
@@ -233,8 +236,24 @@ def main() -> None:
             session.execute(
                 text(
                     """
-                    INSERT INTO stories (id, title, summary, key_points, generated_at, updated_at)
-                    VALUES (:id, :title, :summary, :key_points, :generated_at, :updated_at)
+                    INSERT INTO stories (
+                        id,
+                        title,
+                        summary,
+                        key_points,
+                        story_period,
+                        generated_at,
+                        updated_at
+                    )
+                    VALUES (
+                        :id,
+                        :title,
+                        :summary,
+                        :key_points,
+                        :story_period,
+                        :generated_at,
+                        :updated_at
+                    )
                     """
                 ),
                 [
@@ -243,6 +262,7 @@ def main() -> None:
                         "title": story["title"],
                         "summary": story["summary"],
                         "key_points": story["key_points"],
+                        "story_period": story["story_period"],
                         "generated_at": now,
                         "updated_at": now,
                     }
