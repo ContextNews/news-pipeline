@@ -36,10 +36,10 @@ News Pipeline ingests RSS articles, computes embeddings, and clusters related st
 - `Generate Stories` (`.github/workflows/generate_stories.yaml`)
   - Manual trigger or reusable workflow.
   - Generates story overviews from article clusters using OpenAI (default model: `gpt-4o-mini`).
-  - Defaults to loading to S3 and RDS.
+  - Defaults to loading to S3 and RDS; overwrite is enabled by default.
 
 - `Run Pipeline` (`.github/workflows/run_pipeline.yaml`)
-  - Runs ingest -> embeddings -> clustering sequentially.
+  - Runs: ingest -> (embeddings + entity extraction in parallel) -> clustering -> story generation.
   - Scheduled at 06:00 and 18:00 UTC.
   - Exposes the full set of inputs for each stage.
 

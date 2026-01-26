@@ -18,6 +18,7 @@ dist/
 
 # Project-specific
 **/.plans/
+.ignore/
 collected_readmes/
 output/
 service_tests/output/

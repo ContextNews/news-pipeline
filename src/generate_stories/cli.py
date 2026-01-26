@@ -141,6 +141,12 @@ def main() -> None:
     parser.add_argument("--load-s3", action="store_true", help="Upload results to S3")
     parser.add_argument("--load-rds", action="store_true", help="Save stories to RDS")
     parser.add_argument("--load-local", action="store_true", help="Save results to local file")
+    parser.add_argument(
+        "--overwrite-stories",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Overwrite existing stories for the clustered date",
+    )
     args = parser.parse_args()
 
     load_dotenv()
@@ -191,6 +197,38 @@ def main() -> None:
         from rds_postgres.connection import get_session
 
         with get_session() as session:
+            if args.overwrite_stories:
+                delete_start, delete_end = date_to_range(args.clustered_date)
+                # Delete from junction table first (foreign key constraint)
+                session.execute(
+                    text(
+                        """
+                        DELETE FROM article_stories
+                        WHERE story_id IN (
+                            SELECT id FROM stories
+                            WHERE generated_at >= :start
+                              AND generated_at < :end
+                        )
+                        """
+                    ),
+                    {"start": delete_start, "end": delete_end},
+                )
+                # Then delete stories
+                session.execute(
+                    text(
+                        """
+                        DELETE FROM stories
+                        WHERE generated_at >= :start
+                          AND generated_at < :end
+                        """
+                    ),
+                    {"start": delete_start, "end": delete_end},
+                )
+                logger.info(
+                    "Deleted existing stories for %s",
+                    args.clustered_date.isoformat(),
+                )
+
             # Insert stories
             session.execute(
                 text(

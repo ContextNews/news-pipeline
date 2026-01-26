@@ -98,6 +98,10 @@ on:
         description: 'OpenAI model to use'
         type: string
         default: 'gpt-4o-mini'
+      stories-overwrite-stories:
+        description: 'Overwrite existing stories'
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
@@ -167,3 +171,4 @@ jobs:
       model: ${{ inputs.stories-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true
+      overwrite-stories: ${{ inputs.stories-overwrite-stories != false }}
