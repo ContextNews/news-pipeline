@@ -159,7 +159,7 @@ jobs:
       min-samples: ${{ fromJSON(inputs.cluster-min-samples || '0') }}
       load-s3: true
       load-rds: true
-      overwrite-clusters: ${{ inputs.cluster-overwrite-clusters != false }}
+      overwrite-clusters: true
 
   # Generate stories after clustering
   generate-stories:
@@ -171,4 +171,4 @@ jobs:
       model: ${{ inputs.stories-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true
-      overwrite-stories: ${{ inputs.stories-overwrite-stories != false }}
+      overwrite-stories: true
