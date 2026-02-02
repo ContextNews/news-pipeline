@@ -103,6 +103,34 @@ def _load_clusters_from_rds(cluster_period: date) -> list[dict[str, Any]]:
     return clusters
 
 
+def _load_article_locations_from_rds(article_ids: list[str]) -> dict[str, list[str]]:
+    """Load locations for articles. Returns {article_id: [wikidata_qid, ...]}."""
+    from sqlalchemy import text
+
+    from rds_postgres.connection import get_session
+
+    if not article_ids:
+        return {}
+
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT article_id, wikidata_qid
+            FROM article_locations
+            WHERE article_id = ANY(:article_ids)
+            """
+        )
+        results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
+
+    # Group by article_id
+    article_locations: dict[str, list[str]] = {}
+    for row in results:
+        article_locations.setdefault(row["article_id"], []).append(row["wikidata_qid"])
+
+    logger.info("Loaded locations for %d articles", len(article_locations))
+    return article_locations
+
+
 def _build_story_record(
     cluster_id: str,
     article_ids: list[str],
@@ -121,6 +149,7 @@ def _build_story_record(
         "quotes": story.quotes,
         "sub_stories": story.sub_stories,
         "location": story.location,
+        "location_qid": story.location_qid,
         "noise_article_ids": story.noise_article_ids,
         "story_period": story_period.isoformat(),
         "generated_at": generated_at.isoformat(),
@@ -158,6 +187,14 @@ def main() -> None:
         logger.warning("No clusters found for date %s", args.cluster_period)
         return
 
+    # Get all article IDs from clusters and load their locations
+    all_article_ids = [
+        article["id"]
+        for cluster in clusters
+        for article in cluster["articles"]
+    ]
+    article_locations = _load_article_locations_from_rds(all_article_ids)
+
     # Generate stories for each cluster
     stories = []
     now = datetime.now(timezone.utc)
@@ -169,7 +206,7 @@ def main() -> None:
 
         logger.info("Generating story for cluster %s with %d articles", cluster_id, len(articles))
         try:
-            story = generate_story(articles, model=args.model)
+            story = generate_story(articles, model=args.model, article_locations=article_locations)
             article_ids = story.article_ids or [article["id"] for article in articles]
             record = _build_story_record(cluster_id, article_ids, story, cluster_period, now)
             stories.append(record)
@@ -202,7 +239,20 @@ def main() -> None:
         with get_session() as session:
             if args.overwrite_stories:
                 delete_start, delete_end = date_to_range(args.cluster_period)
-                # Delete from junction table first (foreign key constraint)
+                # Delete from junction tables first (foreign key constraints)
+                session.execute(
+                    text(
+                        """
+                        DELETE FROM story_locations
+                        WHERE story_id IN (
+                            SELECT id FROM stories
+                            WHERE story_period >= :start
+                              AND story_period < :end
+                        )
+                        """
+                    ),
+                    {"start": delete_start, "end": delete_end},
+                )
                 session.execute(
                     text(
                         """
@@ -288,6 +338,29 @@ def main() -> None:
                         """
                     ),
                     article_story_rows,
+                )
+
+            # Insert story_locations
+            story_location_rows = [
+                {"story_id": story["story_id"], "wikidata_qid": story["location_qid"]}
+                for story in stories
+                if story["location_qid"]
+            ]
+
+            if story_location_rows:
+                session.execute(
+                    text(
+                        """
+                        INSERT INTO story_locations (story_id, wikidata_qid)
+                        VALUES (:story_id, :wikidata_qid)
+                        """
+                    ),
+                    story_location_rows,
+                )
+                logger.info(
+                    "Resolved locations for %d of %d stories",
+                    len(story_location_rows),
+                    len(stories),
                 )
 
             session.commit()
