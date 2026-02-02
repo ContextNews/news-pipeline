@@ -17,7 +17,7 @@ dist/
 .eggs/
 
 # Project-specific
-**/.plans/
+**/plans/
 .ignore/
 collected_readmes/
 output/

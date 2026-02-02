@@ -68,6 +68,15 @@ on:
         description: 'Re-extract entities for articles with existing entities'
         type: boolean
         default: false
+      # Resolve locations inputs
+      resolve-locations-published-date:
+        description: 'Resolve locations for articles published on this date (UTC, YYYY-MM-DD)'
+        type: string
+        default: ''
+      resolve-locations-overwrite:
+        description: 'Re-resolve locations for articles with existing locations'
+        type: boolean
+        default: false
       # Cluster inputs
       cluster-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
@@ -147,9 +156,20 @@ jobs:
       load-s3: true
       load-rds: true
 
-  # Cluster waits for both embed and extract-entities
+  # Resolve locations after entities are extracted
+  resolve-locations:
+    needs: extract-entities
+    uses: ./.github/workflows/resolve_article_locations.yaml
+    secrets: inherit
+    with:
+      published-date: ${{ inputs.resolve-locations-published-date || '' }}
+      overwrite: ${{ inputs.resolve-locations-overwrite == true }}
+      load-s3: true
+      load-rds: true
+
+  # Cluster waits for both embed and resolve-locations
   cluster:
-    needs: [embed, extract-entities]
+    needs: [embed, resolve-locations]
     uses: ./.github/workflows/cluster_articles.yaml
     secrets: inherit
     with:
