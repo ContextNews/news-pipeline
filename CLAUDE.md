@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Install dependencies
-poetry install --with dev,ingest_articles,compute_embeddings,extract_entities,cluster_articles,generate_stories
+poetry install --with dev,ingest_articles,compute_embeddings,extract_entities,cluster_articles,generate_stories,classify_stories
 
 # Run tests
 poetry run pytest
@@ -20,11 +20,12 @@ poetry run python -m extract_entities --load-s3 --load-rds --published-date 2024
 poetry run python -m resolve_article_locations --load-s3 --load-rds --published-date 2024-01-01
 poetry run python -m cluster_articles --load-s3 --load-rds --ingested-date 2024-01-01
 poetry run python -m generate_stories --load-s3 --load-rds --cluster-period 2024-01-01
+poetry run python -m classify_stories --load-s3 --load-rds --story-period 2024-01-01
 ```
 
 ## Architecture
 
-This is a modular news processing pipeline with six sequential stages:
+This is a modular news processing pipeline with seven sequential stages:
 
 1. **ingest_articles** - Fetches articles from RSS feeds, extracts full text via trafilatura/readability
 2. **compute_embeddings** - Generates sentence-transformer embeddings (default: all-MiniLM-L6-v2)
@@ -32,6 +33,7 @@ This is a modular news processing pipeline with six sequential stages:
 4. **resolve_article_locations** - Resolves GPE entities to locations using disambiguation heuristics
 5. **cluster_articles** - Groups related articles using HDBSCAN clustering on embeddings
 6. **generate_stories** - Uses OpenAI (via Cronkite library) to generate story summaries from clusters
+7. **classify_stories** - Classifies stories by topic (Politics, Business, Technology, etc.) using Cronkite
 
 Each stage is a standalone module under `src/` with its own CLI (`cli.py`), core logic, and models. Stages read from RDS (PostgreSQL) and write to both S3 and RDS.
 

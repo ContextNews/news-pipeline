@@ -111,6 +111,19 @@ on:
         description: 'Overwrite existing stories'
         type: boolean
         default: true
+      # Classify stories inputs
+      classify-story-period:
+        description: 'UTC story period to classify (YYYY-MM-DD)'
+        type: string
+        default: ''
+      classify-model:
+        description: 'OpenAI model to use for classification'
+        type: string
+        default: 'gpt-4o-mini'
+      classify-overwrite:
+        description: 'Re-classify stories that already have topics'
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
@@ -192,3 +205,15 @@ jobs:
       load-s3: true
       load-rds: true
       overwrite-stories: true
+
+  # Classify stories by topic after story generation
+  classify-stories:
+    needs: generate-stories
+    uses: ./.github/workflows/classify_stories.yaml
+    secrets: inherit
+    with:
+      story-period: ${{ inputs.classify-story-period || '' }}
+      model: ${{ inputs.classify-model || 'gpt-4o-mini' }}
+      load-s3: true
+      load-rds: true
+      overwrite: true
