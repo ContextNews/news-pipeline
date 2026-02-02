@@ -167,9 +167,9 @@ jobs:
       load-s3: true
       load-rds: true
 
-  # Cluster waits for both embed and resolve-locations
+  # Cluster only needs embeddings
   cluster:
-    needs: [embed, resolve-locations]
+    needs: embed
     uses: ./.github/workflows/cluster_articles.yaml
     secrets: inherit
     with:
@@ -181,9 +181,9 @@ jobs:
       load-rds: true
       overwrite-clusters: true
 
-  # Generate stories after clustering
+  # Generate stories after clustering and location resolution
   generate-stories:
-    needs: cluster
+    needs: [cluster, resolve-locations]
     uses: ./.github/workflows/generate_stories.yaml
     secrets: inherit
     with:
