@@ -14,11 +14,12 @@ on:
         description: 'Sources'
         type: string
         default: 'all'
-      # Embed inputs
-      embed-published-date:
-        description: 'Embed articles published on this date (UTC, YYYY-MM-DD)'
+      # Shared date input for embed, entities, and resolve-locations
+      published-date:
+        description: 'Process articles published on this date (UTC, YYYY-MM-DD) - used for embed, entities, resolve-locations'
         type: string
         default: ''
+      # Embed inputs
       embed-model:
         description: 'Sentence-transformers model name'
         type: string
@@ -48,10 +49,6 @@ on:
         type: boolean
         default: false
       # Extract entities inputs
-      entities-published-date:
-        description: 'Extract entities from articles published on this date (UTC, YYYY-MM-DD)'
-        type: string
-        default: ''
       entities-model:
         description: 'spaCy model to use'
         type: string
@@ -69,10 +66,6 @@ on:
         type: boolean
         default: false
       # Resolve locations inputs
-      resolve-locations-published-date:
-        description: 'Resolve locations for articles published on this date (UTC, YYYY-MM-DD)'
-        type: string
-        default: ''
       resolve-locations-overwrite:
         description: 'Re-resolve locations for articles with existing locations'
         type: boolean
@@ -98,28 +91,23 @@ on:
         description: 'Overwrite existing clusters'
         type: boolean
         default: true
-      # Generate stories inputs
+      # Cronkite (story generation & classification) inputs
+      cronkite-model:
+        description: 'OpenAI model for story generation and classification'
+        type: string
+        default: 'gpt-4o-mini'
       stories-cluster-period:
         description: 'UTC cluster period to process (YYYY-MM-DD)'
         type: string
         default: ''
-      stories-model:
-        description: 'OpenAI model to use'
-        type: string
-        default: 'gpt-4o-mini'
       stories-overwrite-stories:
         description: 'Overwrite existing stories'
         type: boolean
         default: true
-      # Classify stories inputs
       classify-story-period:
         description: 'UTC story period to classify (YYYY-MM-DD)'
         type: string
         default: ''
-      classify-model:
-        description: 'OpenAI model to use for classification'
-        type: string
-        default: 'gpt-4o-mini'
       classify-overwrite:
         description: 'Re-classify stories that already have topics'
         type: boolean
@@ -145,7 +133,7 @@ jobs:
     uses: ./.github/workflows/compute_embeddings.yaml
     secrets: inherit
     with:
-      published-date: ${{ inputs.embed-published-date || '' }}
+      published-date: ${{ inputs.published-date || '' }}
       model: ${{ inputs.embed-model || 'all-MiniLM-L6-v2' }}
       batch-size: ${{ fromJSON(inputs.embed-batch-size || '32') }}
       word-limit: ${{ fromJSON(inputs.embed-word-limit || '300') }}
@@ -161,7 +149,7 @@ jobs:
     uses: ./.github/workflows/extract_entities.yaml
     secrets: inherit
     with:
-      published-date: ${{ inputs.entities-published-date || '' }}
+      published-date: ${{ inputs.published-date || '' }}
       model: ${{ inputs.entities-model || 'en_core_web_trf' }}
       batch-size: ${{ fromJSON(inputs.entities-batch-size || '32') }}
       word-limit: ${{ fromJSON(inputs.entities-word-limit || '300') }}
@@ -175,7 +163,7 @@ jobs:
     uses: ./.github/workflows/resolve_article_locations.yaml
     secrets: inherit
     with:
-      published-date: ${{ inputs.resolve-locations-published-date || '' }}
+      published-date: ${{ inputs.published-date || '' }}
       overwrite: ${{ inputs.resolve-locations-overwrite == true }}
       load-s3: true
       load-rds: true
@@ -201,7 +189,7 @@ jobs:
     secrets: inherit
     with:
       cluster-period: ${{ inputs.stories-cluster-period || '' }}
-      model: ${{ inputs.stories-model || 'gpt-4o-mini' }}
+      model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true
       overwrite-stories: true
@@ -213,7 +201,7 @@ jobs:
     secrets: inherit
     with:
       story-period: ${{ inputs.classify-story-period || '' }}
-      model: ${{ inputs.classify-model || 'gpt-4o-mini' }}
+      model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true
       overwrite: true
