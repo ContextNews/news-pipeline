@@ -438,7 +438,7 @@ python-dotenv = ">=1.0.0"
 type = "git"
 url = "https://github.com/ContextNews/Cronkite.git"
 reference = "HEAD"
-resolved_reference = "cfeb916f4d97a98b13d600532444213233d7a505"
+resolved_reference = "c752130f36211365504364d01cc1026664ad1c62"
 
 [[package]]
 name = "cssselect"
