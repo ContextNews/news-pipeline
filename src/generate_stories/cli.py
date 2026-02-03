@@ -266,6 +266,19 @@ def main() -> None:
                     ),
                     {"start": delete_start, "end": delete_end},
                 )
+                session.execute(
+                    text(
+                        """
+                        DELETE FROM story_topics
+                        WHERE story_id IN (
+                            SELECT id FROM stories
+                            WHERE story_period >= :start
+                              AND story_period < :end
+                        )
+                        """
+                    ),
+                    {"start": delete_start, "end": delete_end},
+                )
                 # Then delete stories
                 session.execute(
                     text(
