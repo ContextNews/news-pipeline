@@ -43,6 +43,33 @@ def upload_jsonl_to_s3(
     )
 
 
+def upload_jsonl_records_to_s3(records: list[Any], prefix: str) -> None:
+    """
+    Upload a list of dataclass records to S3 as JSONL.
+
+    Handles serialization, builds the S3 key, and logs the result.
+
+    Args:
+        records: List of dataclass objects to upload
+        prefix: S3 prefix (e.g., "ingested_articles", "embedded_articles")
+    """
+    import logging
+    from datetime import timezone
+    from common.serialization import serialize_dataclass
+
+    logger = logging.getLogger(__name__)
+
+    bucket = os.environ["S3_BUCKET_NAME"]
+    now = datetime.now(timezone.utc)
+    filename = f"{prefix}_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl"
+    key = build_s3_key(prefix, now, filename)
+
+    serialized = [serialize_dataclass(record) for record in records]
+    upload_jsonl_to_s3(serialized, bucket, key)
+
+    logger.info("Uploaded %d records to s3://%s/%s", len(records), bucket, key)
+
+
 def upload_csv_to_s3(csv_content: str, bucket: str, key: str) -> None:
     """Upload CSV string to S3."""
     s3 = get_s3_client()
@@ -84,17 +111,16 @@ def read_jsonl_from_s3(bucket: str, key: str) -> Iterator[dict]:
             yield json.loads(line)
 
 
-def upload_articles(articles: list[Any], session: Any) -> tuple[int, int]:
+def upload_articles(articles: list[Any], session: Any) -> None:
     """
     Upload articles to RDS PostgreSQL.
+
+    Handles insertion with duplicate detection and logs the result.
 
     Args:
         articles: List of article objects or dicts with fields:
             id, source, title, summary, url, published_at, ingested_at, text
         session: SQLAlchemy session
-
-    Returns:
-        Tuple of (articles inserted, articles skipped)
     """
     import logging
     from sqlalchemy.dialects.postgresql import insert
@@ -142,4 +168,4 @@ def upload_articles(articles: list[Any], session: Any) -> tuple[int, int]:
             skipped += 1
 
     session.commit()
-    return inserted, skipped
+    logger.info("Loaded %d articles to RDS (%d skipped as duplicates)", inserted, skipped)

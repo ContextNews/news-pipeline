@@ -1,9 +1,13 @@
-from dataclasses import dataclass, field
+"""Data models for ingest_articles pipeline stage."""
+
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+
 @dataclass
 class RSSArticle:
+    """Raw article parsed from an RSS feed entry."""
     source: str
     title: str
     summary: str
@@ -13,6 +17,7 @@ class RSSArticle:
 
 @dataclass
 class ResolvedArticle:
+    """Article with full text fetched and article ID generated."""
     id: str
     source: str
     title: str
@@ -25,6 +30,7 @@ class ResolvedArticle:
 
 @dataclass
 class CleanedArticle:
+    """Article with text cleaned and normalized (HTML stripped, whitespace collapsed)."""
     id: str
     source: str
     title: str

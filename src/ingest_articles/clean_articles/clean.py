@@ -39,13 +39,21 @@ def clean(raw_articles: list[Any]) -> list[CleanedArticle]:
 
     results = []
     for raw in raw_articles:
+        article_id = _get_value(raw, "id")
+        url = _get_value(raw, "url")
+
+        # Skip articles missing required fields
+        if not article_id or not url:
+            logger.warning("Skipping article with missing id or url: id=%s, url=%s", article_id, url)
+            continue
+
         results.append(
             CleanedArticle(
-                id=_get_value(raw, "id"),
+                id=article_id,
                 source=_get_value(raw, "source"),
                 title=clean_text(_get_value(raw, "title")) or "",
                 summary=clean_text(_get_value(raw, "summary")) or "",
-                url=_get_value(raw, "url"),
+                url=url,
                 published_at=parse_datetime(_get_value(raw, "published_at")),
                 ingested_at=parse_datetime(_get_value(raw, "ingested_at")),
                 text=clean_text(_get_value(raw, "text")),

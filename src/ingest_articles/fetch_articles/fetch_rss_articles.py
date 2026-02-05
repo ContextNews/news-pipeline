@@ -105,5 +105,6 @@ def _parse_published_date(entry) -> datetime | None:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to parse date '%s': %s", published, e)
         return None

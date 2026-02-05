@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import argparse
 import logging
-import os
-from datetime import datetime, timezone
 
 from dotenv import load_dotenv
+from rds_postgres.connection import get_session
 
 from ingest_articles.ingest_articles import ingest_articles
-from ingest_articles.fetch_articles.sources import RSS_FEEDS
-from common.aws import build_s3_key, upload_jsonl_to_s3, upload_articles
-from common.cli_helpers import save_jsonl_local, setup_logging
-from common.serialization import serialize_dataclass
+from ingest_articles.helpers import parse_sources, parse_ingest_articles_args
+from common.aws import upload_jsonl_records_to_s3, upload_articles
+from common.cli_helpers import setup_logging
+from common.local_io import save_jsonl_records_local
 
 load_dotenv()
 
@@ -21,68 +19,41 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-def _parse_sources(value: str | None) -> list[str]:
-    if not value:
-        return list(RSS_FEEDS.keys())
-    if value.strip().lower() == "all":
-        return list(RSS_FEEDS.keys())
-    sources = []
-    for part in value.split(","):
-        source = part.strip()
-        if source:
-            sources.append(source)
-    if "all" in {source.lower() for source in sources}:
-        return list(RSS_FEEDS.keys())
-    return sources or list(RSS_FEEDS.keys())
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--lookback-hours", type=int, default=12)
-    parser.add_argument(
-        "--sources",
-        default=None,
-        help="Comma-separated list of sources (default: all).",
-    )
-    parser.add_argument("--load-s3", action="store_true")
-    parser.add_argument("--load-rds", action="store_true")
-    parser.add_argument("--load-local", action="store_true")
-    args = parser.parse_args()
+    '''
+    Main function to ingest articles and optionally load them to S3, RDS, or local storage.
 
-    sources = _parse_sources(args.sources)
+    CLI Arguments:
+        --lookback-hours: Number of hours to look back for articles (default: 12)
+        --sources: Comma-separated list of RSS sources to fetch (default: all)
+        --load-s3: Upload ingested articles to S3
+        --load-rds: Upload ingested articles to RDS
+        --load-local: Save ingested articles to local JSONL file
+    '''
+
+    # Parse CLI arguments
+    args = parse_ingest_articles_args()
+    sources = parse_sources(args.sources)
+
+    # Ingest and clean articles
     ingested_articles = ingest_articles(
         sources=sources,
         lookback_hours=args.lookback_hours,
     )
 
     if not ingested_articles:
-        logger.warning("No articles cleaned")
+        logger.warning("No articles ingested. Exiting.")
         return
 
-    now = datetime.now(timezone.utc)
-
     if args.load_s3:
-        bucket = os.environ["S3_BUCKET_NAME"]
-        key = build_s3_key(
-            "ingested_articles",
-            now,
-            f"ingested_articles_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl",
-        )
-        records = [serialize_dataclass(article) for article in ingested_articles]
-        upload_jsonl_to_s3(records, bucket, key)
-        logger.info("Uploaded %d cleaned articles to s3://%s/%s", len(ingested_articles), bucket, key)
+        upload_jsonl_records_to_s3(ingested_articles, "ingested_articles")
 
     if args.load_local:
-        records = [serialize_dataclass(article) for article in ingested_articles]
-        filepath = save_jsonl_local(records, "ingested_articles", now)
-        logger.info("Saved %d cleaned articles to %s", len(ingested_articles), filepath)
+        save_jsonl_records_local(ingested_articles, "ingested_articles")
 
     if args.load_rds:
-        from rds_postgres.connection import get_session
-
         with get_session() as session:
-            inserted, skipped = upload_articles(ingested_articles, session)
-        logger.info("Loaded %d articles to RDS (%d skipped as duplicates)", inserted, skipped)
+            upload_articles(ingested_articles, session)
 
 
 if __name__ == "__main__":

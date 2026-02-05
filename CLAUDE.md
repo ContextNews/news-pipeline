@@ -55,6 +55,17 @@ Each stage is a standalone module under `src/` with its own CLI (`cli.py`), core
 - `serialization.py`: `serialize_dataclass()` for JSONL output
 - `hashing.py`: URL hashing for article IDs
 
+### Database Access Pattern
+
+```python
+from rds_postgres.connection import get_session
+from rds_postgres.models import Article
+
+with get_session() as session:
+    articles = session.query(Article).filter(...).all()
+    session.commit()
+```
+
 ### GitHub Actions
 
 The pipeline runs via GitHub Actions (`.github/workflows/`). The `run_pipeline.yaml` workflow orchestrates all stages and runs on a schedule (06:00 and 18:00 UTC). Individual stage workflows can be triggered manually. RDS access uses an SSH tunnel through a bastion host.
