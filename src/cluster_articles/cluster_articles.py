@@ -9,6 +9,8 @@ from typing import Any
 import hdbscan
 import numpy as np
 
+from cluster_articles.models import ClusteredArticle
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,8 +55,18 @@ def cluster_articles(
     articles: list[dict[str, Any]],
     min_cluster_size: int = 5,
     min_samples: int | None = None,
-) -> list[dict[str, Any]]:
-    """Assign cluster labels to articles and return updated records."""
+) -> list[ClusteredArticle]:
+    """
+    Assign cluster labels to articles.
+
+    Args:
+        articles: List of article dicts with embedding field.
+        min_cluster_size: Minimum cluster size for HDBSCAN.
+        min_samples: Minimum samples for HDBSCAN.
+
+    Returns:
+        List of ClusteredArticle with assigned cluster labels.
+    """
     vectors, kept_articles = _prepare_embeddings(articles)
     if vectors.size == 0:
         logger.warning("No embeddings available for clustering")
@@ -74,10 +86,23 @@ def cluster_articles(
 
     results = []
     for label, article in zip(labels, kept_articles, strict=True):
-        record = dict(article)
-        record["cluster_id"] = int(label)
-        results.append(record)
+        results.append(
+            ClusteredArticle(
+                id=article["id"],
+                source=article["source"],
+                title=article["title"],
+                summary=article.get("summary"),
+                url=article["url"],
+                published_at=article["published_at"],
+                ingested_at=article["ingested_at"],
+                text=article.get("text"),
+                cluster_id=int(label),
+                embedding_model=article["embedding_model"],
+            )
+        )
 
-    noise = sum(1 for record in results if record["cluster_id"] == -1)
-    logger.info("Built %d clusters (%d noise)", len(set(labels)), noise)
+    unique_labels = set(labels)
+    noise = sum(1 for record in results if record.cluster_id == -1)
+    cluster_count = len(unique_labels - {-1})
+    logger.info("Built %d clusters (%d noise)", cluster_count, noise)
     return results

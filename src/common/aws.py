@@ -330,6 +330,58 @@ def load_articles_for_entities(published_date: date, overwrite: bool) -> list[di
     return articles
 
 
+def load_articles_with_embeddings(
+    ingested_date: date,
+    embedding_model: str,
+) -> list[dict]:
+    """
+    Load articles with embeddings from RDS for a specific ingested date (UTC).
+
+    Args:
+        ingested_date: Date to load articles for
+        embedding_model: Embedding model to filter by
+
+    Returns:
+        List of article dicts with fields: id, source, title, summary, url,
+        published_at, ingested_at, text, embedding, embedding_model
+    """
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    start, end = date_to_range(ingested_date)
+
+    logger.info("Loading articles ingested from %s to %s", start.isoformat(), end.isoformat())
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                a.id,
+                a.source,
+                a.title,
+                a.summary,
+                a.url,
+                a.published_at,
+                a.ingested_at,
+                a.text,
+                e.embedding,
+                e.embedding_model
+            FROM articles a
+            JOIN article_embeddings e ON e.article_id = a.id
+            WHERE a.ingested_at >= :start
+              AND a.ingested_at < :end
+              AND e.embedding_model = :model
+            """
+        )
+        results = session.execute(
+            stmt,
+            {"start": start, "end": end, "model": embedding_model},
+        ).mappings().all()
+        articles = [dict(row) for row in results]
+
+    logger.info("Loaded %d articles with embeddings", len(articles))
+    return articles
+
+
 def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) -> None:
     """
     Upload article entities to RDS PostgreSQL.
@@ -418,3 +470,99 @@ def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) 
         len(entity_rows),
         len(article_entity_rows),
     )
+
+
+def upload_clusters(
+    clustered_articles: list[Any],
+    session: Any,
+    ingested_date: date,
+    overwrite: bool = True,
+) -> None:
+    """
+    Upload article clusters to RDS PostgreSQL.
+
+    Groups articles by cluster_id, creates cluster records, and links articles
+    to clusters. Noise articles (cluster_id == -1) are ignored.
+
+    Args:
+        clustered_articles: List of article objects/dicts with cluster_id field
+        session: SQLAlchemy session
+        ingested_date: Date used to determine cluster_period
+        overwrite: If True, delete existing clusters for this date first
+    """
+    from uuid import uuid4
+    from sqlalchemy import text
+
+    # Group articles by cluster
+    clusters: dict[int, list[str]] = {}
+    for article in clustered_articles:
+        if hasattr(article, "cluster_id"):
+            cluster_id = article.cluster_id
+            article_id = article.id
+        else:
+            cluster_id = article.get("cluster_id")
+            article_id = article.get("id")
+
+        if cluster_id is None or cluster_id == -1:
+            continue
+        clusters.setdefault(cluster_id, []).append(article_id)
+
+    if not clusters:
+        logger.warning("No non-noise clusters to save")
+        return
+
+    cluster_period = datetime.combine(ingested_date, datetime.min.time())
+    start, end = date_to_range(ingested_date)
+
+    # Delete existing clusters if overwrite
+    if overwrite:
+        session.execute(
+            text(
+                """
+                DELETE FROM article_cluster_articles aca
+                USING article_clusters ac
+                WHERE aca.article_cluster_id = ac.article_cluster_id
+                  AND ac.cluster_period >= :start
+                  AND ac.cluster_period < :end
+                """
+            ),
+            {"start": start, "end": end},
+        )
+        session.execute(
+            text(
+                """
+                DELETE FROM article_clusters
+                WHERE cluster_period >= :start
+                  AND cluster_period < :end
+                """
+            ),
+            {"start": start, "end": end},
+        )
+
+    # Insert clusters and their articles
+    for _, article_ids in clusters.items():
+        cluster_uuid = uuid4().hex
+        session.execute(
+            text(
+                """
+                INSERT INTO article_clusters (article_cluster_id, cluster_period)
+                VALUES (:cluster_id, :cluster_period)
+                """
+            ),
+            {"cluster_id": cluster_uuid, "cluster_period": cluster_period},
+        )
+        session.execute(
+            text(
+                """
+                INSERT INTO article_cluster_articles (article_cluster_id, article_id)
+                VALUES (:cluster_id, :article_id)
+                """
+            ),
+            [
+                {"cluster_id": cluster_uuid, "article_id": article_id}
+                for article_id in article_ids
+            ],
+        )
+
+    session.commit()
+    logger.info("Saved %d clusters to RDS", len(clusters))
