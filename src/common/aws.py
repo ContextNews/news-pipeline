@@ -282,3 +282,139 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
 
     session.commit()
     logger.info("Upserted %d embeddings to RDS (%d updated, %d inserted)", updated + inserted, updated, inserted)
+
+
+def load_articles_for_entities(published_date: date, overwrite: bool) -> list[dict]:
+    """
+    Load articles from RDS for entity extraction.
+
+    Args:
+        published_date: Date to load articles for
+        overwrite: If True, include articles that already have entities
+
+    Returns:
+        List of article dicts with fields: id, title, summary, text
+    """
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    start, end = date_to_range(published_date)
+
+    logger.info("Loading articles published from %s to %s", start.isoformat(), end.isoformat())
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                a.id,
+                a.title,
+                a.summary,
+                a.text
+            FROM articles a
+            WHERE a.published_at >= :start
+              AND a.published_at < :end
+              AND a.text IS NOT NULL
+              AND (:overwrite OR NOT EXISTS (
+                    SELECT 1
+                    FROM article_entities ae
+                    WHERE ae.article_id = a.id
+                ))
+            """
+        )
+        results = session.execute(
+            stmt,
+            {"start": start, "end": end, "overwrite": overwrite},
+        ).mappings().all()
+        articles = [dict(row) for row in results]
+
+    logger.info("Loaded %d articles from RDS", len(articles))
+    return articles
+
+
+def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) -> None:
+    """
+    Upload article entities to RDS PostgreSQL.
+
+    Handles deletion of existing entities (if overwrite), insertion of new entity
+    definitions, and insertion of article-entity relationships.
+
+    Args:
+        entities: List of entity objects with fields:
+            article_id, entity_type, entity_name, count, in_title
+        session: SQLAlchemy session
+        overwrite: If True, delete existing entities for these articles first
+    """
+    from sqlalchemy import text
+
+    if not entities:
+        logger.warning("No entities to upload")
+        return
+
+    # Get unique article IDs
+    article_ids = sorted({entity.article_id for entity in entities})
+
+    # Delete existing entities if overwrite
+    if overwrite and article_ids:
+        session.execute(
+            text("DELETE FROM article_entities WHERE article_id = ANY(:article_ids)"),
+            {"article_ids": article_ids},
+        )
+
+    # Insert unique entity definitions
+    unique_entities = {(entity.entity_type, entity.entity_name) for entity in entities}
+    entity_rows = [
+        {"entity_type": entity_type, "entity_name": entity_name}
+        for entity_type, entity_name in unique_entities
+    ]
+    if entity_rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO entities (type, name)
+                VALUES (:entity_type, :entity_name)
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            entity_rows,
+        )
+
+    # Insert article-entity relationships
+    article_entity_rows = [
+        {
+            "article_id": entity.article_id,
+            "entity_type": entity.entity_type,
+            "entity_name": entity.entity_name,
+            "entity_count": entity.count,
+            "entity_in_article_title": entity.in_title,
+        }
+        for entity in entities
+    ]
+    if article_entity_rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO article_entities (
+                    article_id,
+                    entity_type,
+                    entity_name,
+                    entity_count,
+                    entity_in_article_title
+                )
+                VALUES (
+                    :article_id,
+                    :entity_type,
+                    :entity_name,
+                    :entity_count,
+                    :entity_in_article_title
+                )
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            article_entity_rows,
+        )
+
+    session.commit()
+    logger.info(
+        "Upserted %d entity definitions and %d article entities into RDS",
+        len(entity_rows),
+        len(article_entity_rows),
+    )

@@ -10,14 +10,9 @@ import pycountry
 import spacy
 
 from extract_entities.models import ArticleEntity
+from common.utils import get_value
 
 logger = logging.getLogger(__name__)
-
-
-def _get_value(obj: Any, key: str) -> Any:
-    if isinstance(obj, dict):
-        return obj.get(key)
-    return getattr(obj, key, None)
 
 
 def _apply_word_limit(text: str, word_limit: int | None) -> str:
@@ -42,7 +37,7 @@ def _normalize_entity_name(text: str) -> str:
 def _contains_alias(short_name: str, long_name: str) -> bool:
     if not short_name or not long_name or short_name == long_name:
         return False
-    pattern = rf"(?<!\\w){re.escape(short_name)}(?!\\w)"
+    pattern = rf"(?<!\w){re.escape(short_name)}(?!\w)"
     return re.search(pattern, long_name) is not None
 
 
@@ -81,12 +76,12 @@ def _collect_article_texts(
 ) -> list[dict[str, str]]:
     rows = []
     for article in articles:
-        article_id = _get_value(article, "id")
+        article_id = get_value(article, "id")
         if not article_id:
             continue
-        title = _get_value(article, "title") or ""
-        summary = _get_value(article, "summary") or ""
-        text = _get_value(article, "text") or ""
+        title = get_value(article, "title") or ""
+        summary = get_value(article, "summary") or ""
+        text = get_value(article, "text") or ""
         combined = " ".join(part for part in (title, summary, text) if part)
         combined = _apply_word_limit(combined, word_limit)
         if not combined:
