@@ -19,6 +19,11 @@ on:
         description: 'Process articles published on this date (UTC, YYYY-MM-DD) - used for embed, entities, resolve-locations'
         type: string
         default: ''
+      # Shared overwrite input for all stages after ingest
+      overwrite:
+        description: 'Re-process articles/clusters/stories even if already processed'
+        type: boolean
+        default: false
       # Embed inputs
       embed-model:
         description: 'Sentence-transformers model name'
@@ -44,10 +49,6 @@ on:
         description: 'Exclude text from embedding'
         type: boolean
         default: false
-      embed-overwrite:
-        description: 'Re-embed articles even if already embedded for this model'
-        type: boolean
-        default: false
       # Extract entities inputs
       entities-model:
         description: 'spaCy model to use'
@@ -61,15 +62,6 @@ on:
         description: 'Entity extraction word limit'
         type: number
         default: 300
-      entities-overwrite:
-        description: 'Re-extract entities for articles with existing entities'
-        type: boolean
-        default: false
-      # Resolve locations inputs
-      resolve-locations-overwrite:
-        description: 'Re-resolve locations for articles with existing locations'
-        type: boolean
-        default: false
       # Cluster inputs
       cluster-ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
@@ -87,10 +79,6 @@ on:
         description: 'Minimum samples (leave empty for default)'
         type: number
         default: 0
-      cluster-overwrite-clusters:
-        description: 'Overwrite existing clusters'
-        type: boolean
-        default: true
       # Cronkite (story generation & classification) inputs
       cronkite-model:
         description: 'OpenAI model for story generation and classification'
@@ -100,18 +88,10 @@ on:
         description: 'UTC cluster period to process (YYYY-MM-DD)'
         type: string
         default: ''
-      stories-overwrite-stories:
-        description: 'Overwrite existing stories'
-        type: boolean
-        default: true
       classify-story-period:
         description: 'UTC story period to classify (YYYY-MM-DD)'
         type: string
         default: ''
-      classify-overwrite:
-        description: 'Re-classify stories that already have topics'
-        type: boolean
-        default: true
 
 permissions:
   id-token: write
@@ -140,7 +120,7 @@ jobs:
       no-title: ${{ inputs.embed-no-title == true }}
       no-summary: ${{ inputs.embed-no-summary == true }}
       no-text: ${{ inputs.embed-no-text == true }}
-      overwrite: ${{ inputs.embed-overwrite == true }}
+      overwrite: ${{ inputs.overwrite == true }}
       load-s3: true
       load-rds: true
 
@@ -153,7 +133,7 @@ jobs:
       model: ${{ inputs.entities-model || 'en_core_web_trf' }}
       batch-size: ${{ fromJSON(inputs.entities-batch-size || '32') }}
       word-limit: ${{ fromJSON(inputs.entities-word-limit || '300') }}
-      overwrite: ${{ inputs.entities-overwrite == true }}
+      overwrite: ${{ inputs.overwrite == true }}
       load-s3: true
       load-rds: true
 
@@ -164,7 +144,7 @@ jobs:
     secrets: inherit
     with:
       published-date: ${{ inputs.published-date || '' }}
-      overwrite: ${{ inputs.resolve-locations-overwrite == true }}
+      overwrite: ${{ inputs.overwrite == true }}
       load-s3: true
       load-rds: true
 
@@ -180,7 +160,7 @@ jobs:
       min-samples: ${{ fromJSON(inputs.cluster-min-samples || '0') }}
       load-s3: true
       load-rds: true
-      overwrite-clusters: true
+      overwrite-clusters: ${{ inputs.overwrite == true }}
 
   # Generate stories after clustering and location resolution
   generate-stories:
@@ -192,7 +172,7 @@ jobs:
       model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true
-      overwrite-stories: true
+      overwrite-stories: ${{ inputs.overwrite == true }}
 
   # Classify stories by topic after story generation
   classify-stories:
@@ -204,4 +184,4 @@ jobs:
       model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true
-      overwrite: true
+      overwrite: ${{ inputs.overwrite == true }}
