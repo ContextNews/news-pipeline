@@ -1,13 +1,18 @@
 import gzip
 import json
+import logging
 import os
-import boto3
-from datetime import datetime
+from datetime import date, datetime
 from typing import Iterable, Iterator, Mapping, Any
 
+import boto3
 from dotenv import load_dotenv
 
+from common.cli_helpers import date_to_range
+
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 def get_s3_client():
@@ -169,3 +174,111 @@ def upload_articles(articles: list[Any], session: Any) -> None:
 
     session.commit()
     logger.info("Loaded %d articles to RDS (%d skipped as duplicates)", inserted, skipped)
+
+
+def load_ingested_articles(
+    published_date: date,
+    model: str,
+    overwrite: bool,
+) -> list[dict]:
+    """
+    Load articles from RDS for a specific published date (UTC).
+
+    Args:
+        published_date: Date to load articles for
+        model: Embedding model name (used to filter already-embedded articles)
+        overwrite: If True, include articles that already have embeddings
+
+    Returns:
+        List of article dicts with fields: id, source, title, summary, url,
+        published_at, ingested_at, text
+    """
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    start, end = date_to_range(published_date)
+
+    logger.info("Loading articles published from %s to %s", start.isoformat(), end.isoformat())
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                a.id,
+                a.source,
+                a.title,
+                a.summary,
+                a.url,
+                a.published_at,
+                a.ingested_at,
+                a.text
+            FROM articles a
+            WHERE a.published_at >= :start
+              AND a.published_at < :end
+              AND (:overwrite OR NOT EXISTS (
+                    SELECT 1
+                    FROM article_embeddings e
+                    WHERE e.article_id = a.id
+                      AND e.embedding_model = :model
+                ))
+            """
+        )
+        results = session.execute(
+            stmt,
+            {"start": start, "end": end, "overwrite": overwrite, "model": model},
+        ).mappings().all()
+        articles = [dict(row) for row in results]
+
+    logger.info("Loaded %d articles from RDS", len(articles))
+    return articles
+
+
+def upload_embeddings(embeddings: list[Any], session: Any) -> None:
+    """
+    Upload article embeddings to RDS PostgreSQL.
+
+    Handles upsert (update existing or insert new) and logs the result.
+
+    Args:
+        embeddings: List of embedding objects with fields:
+            id, embedded_text, embedding, embedding_model
+        session: SQLAlchemy session
+    """
+    from sqlalchemy import text
+
+    updated = 0
+    inserted = 0
+
+    for embedding in embeddings:
+        params = {
+            "article_id": embedding.id,
+            "embedded_text": embedding.embedded_text,
+            "embedding": embedding.embedding,
+            "embedding_model": embedding.embedding_model,
+        }
+        update_stmt = text(
+            """
+            UPDATE article_embeddings
+            SET embedded_text = :embedded_text,
+                embedding = :embedding
+            WHERE article_id = :article_id
+              AND embedding_model = :embedding_model
+            """
+        )
+        result = session.execute(update_stmt, params)
+        if result.rowcount and result.rowcount > 0:
+            updated += 1
+            continue
+
+        insert_stmt = text(
+            """
+            INSERT INTO article_embeddings
+                (article_id, embedded_text, embedding, embedding_model)
+            VALUES
+                (:article_id, :embedded_text, :embedding, :embedding_model)
+            """
+        )
+        session.execute(insert_stmt, params)
+        inserted += 1
+
+    session.commit()
+    logger.info("Upserted %d embeddings to RDS (%d updated, %d inserted)", updated + inserted, updated, inserted)

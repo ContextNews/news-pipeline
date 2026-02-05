@@ -6,14 +6,9 @@ from typing import Any, Optional
 
 from ingest_articles.models import CleanedArticle
 from common.datetime import parse_datetime
+from common.utils import get_value
 
 logger = logging.getLogger(__name__)
-
-
-def _get_value(raw: Any, key: str) -> Any:
-    if isinstance(raw, dict):
-        return raw.get(key)
-    return getattr(raw, key, None)
 
 
 def clean_text(text: Optional[str]) -> Optional[str]:
@@ -39,8 +34,8 @@ def clean(raw_articles: list[Any]) -> list[CleanedArticle]:
 
     results = []
     for raw in raw_articles:
-        article_id = _get_value(raw, "id")
-        url = _get_value(raw, "url")
+        article_id = get_value(raw, "id")
+        url = get_value(raw, "url")
 
         # Skip articles missing required fields
         if not article_id or not url:
@@ -50,13 +45,13 @@ def clean(raw_articles: list[Any]) -> list[CleanedArticle]:
         results.append(
             CleanedArticle(
                 id=article_id,
-                source=_get_value(raw, "source"),
-                title=clean_text(_get_value(raw, "title")) or "",
-                summary=clean_text(_get_value(raw, "summary")) or "",
+                source=get_value(raw, "source"),
+                title=clean_text(get_value(raw, "title")) or "",
+                summary=clean_text(get_value(raw, "summary")) or "",
                 url=url,
-                published_at=parse_datetime(_get_value(raw, "published_at")),
-                ingested_at=parse_datetime(_get_value(raw, "ingested_at")),
-                text=clean_text(_get_value(raw, "text")),
+                published_at=parse_datetime(get_value(raw, "published_at")),
+                ingested_at=parse_datetime(get_value(raw, "ingested_at")),
+                text=clean_text(get_value(raw, "text")),
             )
         )
 

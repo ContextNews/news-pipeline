@@ -7,6 +7,7 @@ from typing import Any
 from sentence_transformers import SentenceTransformer
 
 from compute_embeddings.models import EmbeddedArticle
+from common.utils import get_value
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +23,17 @@ def _build_text_to_embed(
     parts = []
 
     if embed_title:
-        title = _get_value(article, "title")
+        title = get_value(article, "title")
         if title:
             parts.append(title)
 
     if embed_summary:
-        summary = _get_value(article, "summary")
+        summary = get_value(article, "summary")
         if summary:
             parts.append(summary)
 
     if embed_text:
-        text = _get_value(article, "text")
+        text = get_value(article, "text")
         if text:
             parts.append(text)
 
@@ -53,13 +54,6 @@ def _build_text_to_embed(
         combined = " ".join(selected)
 
     return combined
-
-
-def _get_value(obj: Any, key: str) -> Any:
-    """Get value from dict or object attribute."""
-    if isinstance(obj, dict):
-        return obj.get(key)
-    return getattr(obj, key, None)
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -98,19 +92,35 @@ def compute_embeddings(
         logger.warning("No articles to embed")
         return []
 
+    # Filter out articles missing required fields
+    valid_articles = []
+    for article in articles:
+        article_id = get_value(article, "id")
+        url = get_value(article, "url")
+        if not article_id or not url:
+            logger.warning("Skipping article with missing id or url: id=%s, url=%s", article_id, url)
+            continue
+        valid_articles.append(article)
+
+    if not valid_articles:
+        logger.warning("No valid articles to embed after filtering")
+        return []
+
     logger.info("Loading model: %s", model)
     encoder = SentenceTransformer(model)
 
     # Build texts to embed
     texts_to_embed = []
-    for article in articles:
+    for article in valid_articles:
         text = _build_text_to_embed(
             article, embed_title, embed_summary, embed_text, word_limit
         )
+        if not text:
+            logger.warning("Empty text to embed for article: id=%s", get_value(article, "id"))
         texts_to_embed.append(text)
 
     # Compute embeddings in batches
-    logger.info("Computing embeddings for %d articles (batch_size=%d)", len(articles), batch_size)
+    logger.info("Computing embeddings for %d articles (batch_size=%d)", len(valid_articles), batch_size)
     embeddings = encoder.encode(
         texts_to_embed,
         batch_size=batch_size,
@@ -120,17 +130,17 @@ def compute_embeddings(
 
     # Build result objects
     results = []
-    for article, embedded_text, embedding in zip(articles, texts_to_embed, embeddings):
+    for article, embedded_text, embedding in zip(valid_articles, texts_to_embed, embeddings):
         results.append(
             EmbeddedArticle(
-                id=_get_value(article, "id"),
-                source=_get_value(article, "source"),
-                title=_get_value(article, "title") or "",
-                summary=_get_value(article, "summary") or "",
-                url=_get_value(article, "url"),
-                published_at=_get_value(article, "published_at"),
-                ingested_at=_get_value(article, "ingested_at"),
-                text=_get_value(article, "text"),
+                id=get_value(article, "id"),
+                source=get_value(article, "source"),
+                title=get_value(article, "title") or "",
+                summary=get_value(article, "summary") or "",
+                url=get_value(article, "url"),
+                published_at=get_value(article, "published_at"),
+                ingested_at=get_value(article, "ingested_at"),
+                text=get_value(article, "text"),
                 embedded_text=embedded_text,
                 embedding=embedding.tolist(),
                 embedding_model=model,
