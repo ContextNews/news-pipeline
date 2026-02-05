@@ -23,7 +23,7 @@ on:
       overwrite:
         description: 'Re-process articles/clusters/stories even if already processed'
         type: boolean
-        default: false
+        default: true
       # Embed inputs
       embed-model:
         description: 'Sentence-transformers model name'
