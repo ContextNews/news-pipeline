@@ -15,7 +15,7 @@ on:
       load-rds:
         type: boolean
         default: true
-      overwrite-stories:
+      overwrite:
         type: boolean
         default: true
   workflow_dispatch:
@@ -37,7 +37,7 @@ on:
         description: 'Load stories to RDS'
         type: boolean
         default: true
-      overwrite-stories:
+      overwrite:
         description: 'Overwrite existing stories'
         type: boolean
         default: true
@@ -111,8 +111,8 @@ jobs:
           if [ "${{ inputs.load-rds }}" = "true" ]; then
             ARGS="$ARGS --load-rds"
           fi
-          if [ "${{ inputs.overwrite-stories }}" = "false" ]; then
-            ARGS="$ARGS --no-overwrite-stories"
+          if [ "${{ inputs.overwrite }}" = "false" ]; then
+            ARGS="$ARGS --no-overwrite"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 

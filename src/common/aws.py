@@ -2,7 +2,7 @@ import gzip
 import json
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Iterable, Iterator, Mapping, Any
 
 import boto3
@@ -470,6 +470,237 @@ def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) 
         len(entity_rows),
         len(article_entity_rows),
     )
+
+
+def load_clusters(cluster_period: date) -> list[dict[str, Any]]:
+    """Load article clusters and their articles from RDS for a specific cluster period (UTC)."""
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    start, end = date_to_range(cluster_period)
+
+    logger.info("Loading clusters from %s to %s", start.isoformat(), end.isoformat())
+
+    with get_session() as session:
+        clusters_stmt = text(
+            """
+            SELECT article_cluster_id, cluster_period
+            FROM article_clusters
+            WHERE cluster_period >= :start
+              AND cluster_period < :end
+            """
+        )
+        cluster_results = session.execute(
+            clusters_stmt,
+            {"start": start, "end": end},
+        ).mappings().all()
+
+        if not cluster_results:
+            return []
+
+        cluster_ids = [row["article_cluster_id"] for row in cluster_results]
+
+        articles_stmt = text(
+            """
+            SELECT
+                aca.article_cluster_id,
+                a.id,
+                a.source,
+                a.title,
+                a.summary,
+                a.url,
+                a.published_at,
+                a.text
+            FROM article_cluster_articles aca
+            JOIN articles a ON a.id = aca.article_id
+            WHERE aca.article_cluster_id = ANY(:cluster_ids)
+            """
+        )
+        article_results = session.execute(
+            articles_stmt,
+            {"cluster_ids": cluster_ids},
+        ).mappings().all()
+
+    # Group articles by cluster
+    clusters_map: dict[str, list[dict[str, Any]]] = {}
+    for row in article_results:
+        cluster_id = row["article_cluster_id"]
+        article = {
+            "id": row["id"],
+            "source": row["source"],
+            "title": row["title"],
+            "summary": row["summary"],
+            "url": row["url"],
+            "published_at": row["published_at"],
+            "text": row["text"],
+        }
+        clusters_map.setdefault(cluster_id, []).append(article)
+
+    clusters = []
+    for cluster_row in cluster_results:
+        cluster_id = cluster_row["article_cluster_id"]
+        if cluster_id in clusters_map:
+            clusters.append({
+                "cluster_id": cluster_id,
+                "cluster_period": cluster_row["cluster_period"],
+                "articles": clusters_map[cluster_id],
+            })
+
+    logger.info("Loaded %d clusters with %d total articles", len(clusters), len(article_results))
+    return clusters
+
+
+def load_article_locations(article_ids: list[str]) -> dict[str, list[str]]:
+    """Load locations for articles. Returns {article_id: [wikidata_qid, ...]}."""
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    if not article_ids:
+        return {}
+
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT article_id, wikidata_qid
+            FROM article_locations
+            WHERE article_id = ANY(:article_ids)
+            """
+        )
+        results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
+
+    article_locations: dict[str, list[str]] = {}
+    for row in results:
+        article_locations.setdefault(row["article_id"], []).append(row["wikidata_qid"])
+
+    logger.info("Loaded locations for %d articles", len(article_locations))
+    return article_locations
+
+
+def upload_stories(
+    stories: list[dict[str, Any]],
+    session: Any,
+    cluster_period: date,
+    overwrite: bool = True,
+) -> None:
+    """
+    Upload generated stories to RDS PostgreSQL.
+
+    Handles deletion of existing stories (if overwrite) and insertion of new stories
+    with their article links and location references.
+
+    Args:
+        stories: List of story dicts with fields: story_id, title, summary,
+            key_points, story_period, article_ids, location_qid
+        session: SQLAlchemy session
+        cluster_period: Date used to determine story_period for deletion
+        overwrite: If True, delete existing stories for this period first
+    """
+    from sqlalchemy import text
+
+    now = datetime.now(timezone.utc)
+
+    if overwrite:
+        start, end = date_to_range(cluster_period)
+        # Delete from junction tables first (foreign key constraints)
+        for table in ("story_locations", "article_stories", "story_topics"):
+            session.execute(
+                text(
+                    f"""
+                    DELETE FROM {table}
+                    WHERE story_id IN (
+                        SELECT id FROM stories
+                        WHERE story_period >= :start
+                          AND story_period < :end
+                    )
+                    """
+                ),
+                {"start": start, "end": end},
+            )
+        session.execute(
+            text(
+                """
+                DELETE FROM stories
+                WHERE story_period >= :start
+                  AND story_period < :end
+                """
+            ),
+            {"start": start, "end": end},
+        )
+        logger.info("Deleted existing stories for %s", cluster_period.isoformat())
+
+    # Insert stories
+    session.execute(
+        text(
+            """
+            INSERT INTO stories (
+                id, title, summary, key_points,
+                story_period, generated_at, updated_at
+            )
+            VALUES (
+                :id, :title, :summary, :key_points,
+                :story_period, :generated_at, :updated_at
+            )
+            """
+        ),
+        [
+            {
+                "id": story["story_id"],
+                "title": story["title"],
+                "summary": story["summary"],
+                "key_points": story["key_points"],
+                "story_period": story["story_period"],
+                "generated_at": now,
+                "updated_at": now,
+            }
+            for story in stories
+        ],
+    )
+
+    # Insert article_stories links
+    article_story_rows = []
+    for story in stories:
+        for article_id in story["article_ids"]:
+            article_story_rows.append({
+                "article_id": article_id,
+                "story_id": story["story_id"],
+            })
+
+    if article_story_rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO article_stories (article_id, story_id)
+                VALUES (:article_id, :story_id)
+                """
+            ),
+            article_story_rows,
+        )
+
+    # Insert story_locations
+    story_location_rows = [
+        {"story_id": story["story_id"], "wikidata_qid": story["location_qid"]}
+        for story in stories
+        if story["location_qid"]
+    ]
+
+    if story_location_rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO story_locations (story_id, wikidata_qid)
+                VALUES (:story_id, :wikidata_qid)
+                """
+            ),
+            story_location_rows,
+        )
+        logger.info(
+            "Resolved locations for %d of %d stories",
+            len(story_location_rows),
+            len(stories),
+        )
+
+    session.commit()
+    logger.info("Saved %d stories to RDS", len(stories))
 
 
 def upload_clusters(

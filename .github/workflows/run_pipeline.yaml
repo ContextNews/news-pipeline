@@ -172,7 +172,7 @@ jobs:
       model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true
-      overwrite-stories: ${{ inputs.overwrite == true }}
+      overwrite: ${{ inputs.overwrite == true }}
 
   # Classify stories by topic after story generation
   classify-stories:
