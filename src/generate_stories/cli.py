@@ -61,6 +61,23 @@ def main() -> None:
 
     logger.info("Generated %d stories", len(stories))
 
+    # Classify stories by topic
+    if args.classify:
+        from generate_stories.classify_stories import classify_stories
+
+        cronkite_stories = [
+            {"id": s["story_id"], "title": s["title"], "summary": s["summary"]}
+            for s in stories
+        ]
+        try:
+            classified = classify_stories(cronkite_stories, model=args.model)
+            topics_by_id = {cs.story_id: cs.topics for cs in classified}
+            for story in stories:
+                story["topics"] = topics_by_id.get(story["story_id"], [])
+            logger.info("Classified %d of %d stories", len(classified), len(stories))
+        except Exception as e:
+            logger.error("Failed to classify stories: %s", e)
+
     if args.load_s3:
         bucket_key = build_s3_key(
             "generated_stories",

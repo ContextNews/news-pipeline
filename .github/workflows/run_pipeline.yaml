@@ -88,10 +88,6 @@ on:
         description: 'UTC cluster period to process (YYYY-MM-DD)'
         type: string
         default: ''
-      classify-story-period:
-        description: 'UTC story period to classify (YYYY-MM-DD)'
-        type: string
-        default: ''
 
 permissions:
   id-token: write
@@ -162,25 +158,13 @@ jobs:
       load-rds: true
       overwrite-clusters: ${{ inputs.overwrite == true }}
 
-  # Generate stories after clustering and location resolution
+  # Generate and classify stories after clustering and location resolution
   generate-stories:
     needs: [cluster, resolve-locations]
     uses: ./.github/workflows/generate_stories.yaml
     secrets: inherit
     with:
       cluster-period: ${{ inputs.stories-cluster-period || '' }}
-      model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
-      load-s3: true
-      load-rds: true
-      overwrite: ${{ inputs.overwrite == true }}
-
-  # Classify stories by topic after story generation
-  classify-stories:
-    needs: generate-stories
-    uses: ./.github/workflows/classify_stories.yaml
-    secrets: inherit
-    with:
-      story-period: ${{ inputs.classify-story-period || '' }}
       model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
       load-s3: true
       load-rds: true

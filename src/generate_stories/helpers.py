@@ -36,6 +36,12 @@ def parse_generate_stories_args() -> argparse.Namespace:
         default=True,
         help="Overwrite existing stories for the cluster period (default: True)",
     )
+    parser.add_argument(
+        "--classify",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Classify stories by topic after generation (default: True)",
+    )
 
     # Output options
     parser.add_argument("--load-s3", action="store_true", help="Upload results to S3")

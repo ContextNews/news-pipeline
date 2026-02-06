@@ -18,6 +18,9 @@ on:
       overwrite:
         type: boolean
         default: true
+      classify:
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       cluster-period:
@@ -39,6 +42,10 @@ on:
         default: true
       overwrite:
         description: 'Overwrite existing stories'
+        type: boolean
+        default: true
+      classify:
+        description: 'Classify stories by topic after generation'
         type: boolean
         default: true
 
@@ -113,6 +120,9 @@ jobs:
           fi
           if [ "${{ inputs.overwrite }}" = "false" ]; then
             ARGS="$ARGS --no-overwrite"
+          fi
+          if [ "${{ inputs.classify }}" = "false" ]; then
+            ARGS="$ARGS --no-classify"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 

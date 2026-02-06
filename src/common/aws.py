@@ -699,6 +699,28 @@ def upload_stories(
             len(stories),
         )
 
+    # Insert story_topics (if stories have been classified)
+    topic_rows = []
+    for story in stories:
+        for topic in story.get("topics", []):
+            topic_rows.append({
+                "story_id": story["story_id"],
+                "topic": topic,
+            })
+
+    if topic_rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO story_topics (story_id, topic)
+                VALUES (:story_id, :topic)
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            topic_rows,
+        )
+        logger.info("Saved %d topic classifications to RDS", len(topic_rows))
+
     session.commit()
     logger.info("Saved %d stories to RDS", len(stories))
 

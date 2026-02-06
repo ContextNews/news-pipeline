@@ -24,7 +24,7 @@ def classify_stories(
     Classify stories by topic using Cronkite.
 
     Args:
-        stories: List of story dicts with 'id', 'title', 'summary', 'key_points'.
+        stories: List of story dicts with 'id', 'title', 'summary'.
         model: OpenAI model to use for classification.
 
     Returns:
@@ -35,7 +35,6 @@ def classify_stories(
 
     cronkite = Cronkite(model=model)
 
-    # Prepare stories for Cronkite (expects title, summary)
     cronkite_stories = [
         {
             "id": story["id"],

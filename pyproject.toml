@@ -52,11 +52,6 @@ numpy = ">=1.26"
 cronkite = {git = "https://github.com/ContextNews/Cronkite.git"}
 openai = ">=1.0"
 
-# Classify stories service dependencies
-[tool.poetry.group.classify_stories.dependencies]
-cronkite = {git = "https://github.com/ContextNews/Cronkite.git"}
-openai = ">=1.0"
-
 # Development dependencies
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0"
