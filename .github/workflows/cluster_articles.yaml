@@ -130,7 +130,7 @@ jobs:
             ARGS="$ARGS --load-rds"
           fi
           if [ "${{ inputs.overwrite-clusters }}" = "false" ]; then
-            ARGS="$ARGS --no-overwrite-clusters"
+            ARGS="$ARGS --no-overwrite"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 
