@@ -1,4 +1,4 @@
-name: Resolve Article Locations
+name: Resolve Entities
 
 on:
   workflow_call:
@@ -18,25 +18,25 @@ on:
   workflow_dispatch:
     inputs:
       published-date:
-        description: 'Resolve locations for articles published on this date (UTC, YYYY-MM-DD)'
+        description: 'Resolve entities for articles published on this date (UTC, YYYY-MM-DD)'
         type: string
         required: false
         default: ''
       overwrite:
-        description: 'Re-resolve locations for articles with existing locations'
+        description: 'Re-resolve entities for articles with existing resolutions'
         type: boolean
         default: false
       load-s3:
-        description: 'Load locations to S3'
+        description: 'Load resolved entities to S3'
         type: boolean
         default: true
       load-rds:
-        description: 'Load locations to RDS'
+        description: 'Load resolved entities to RDS'
         type: boolean
         default: true
 
 jobs:
-  resolve-article-locations:
+  resolve-entities:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -83,7 +83,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-resolve-article-locations-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-resolve-entities-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
@@ -108,9 +108,9 @@ jobs:
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 
-      - name: Run resolve_article_locations
+      - name: Run resolve_entities
         env:
           PYTHONPATH: src
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD }}@localhost:5432/contextdb
-        run: poetry run python -m resolve_article_locations ${{ steps.build-args.outputs.args }}
+        run: poetry run python -m resolve_entities ${{ steps.build-args.outputs.args }}

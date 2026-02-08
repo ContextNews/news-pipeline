@@ -725,6 +725,255 @@ def upload_stories(
     logger.info("Saved %d stories to RDS", len(stories))
 
 
+def load_entities_for_resolution(
+    published_date: date,
+    overwrite: bool,
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """
+    Load GPE and PERSON entities from RDS for entity resolution.
+
+    Args:
+        published_date: Date to load articles for
+        overwrite: If True, include articles that already have resolved entities
+
+    Returns:
+        Tuple of (gpe_entities, person_entities) where each is
+        {article_id: [ENTITY_NAME, ...]} with uppercase names
+    """
+    from collections import defaultdict
+
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    start, end = date_to_range(published_date)
+
+    logger.info(
+        "Loading GPE and PERSON entities for articles published from %s to %s",
+        start.isoformat(),
+        end.isoformat(),
+    )
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                ae.article_id,
+                ae.entity_type,
+                ae.entity_name
+            FROM article_entities ae
+            JOIN articles a ON a.id = ae.article_id
+            WHERE a.published_at >= :start
+              AND a.published_at < :end
+              AND ae.entity_type IN ('GPE', 'PERSON')
+              AND (:overwrite OR (
+                NOT EXISTS (
+                    SELECT 1 FROM article_locations al
+                    WHERE al.article_id = ae.article_id
+                )
+                OR NOT EXISTS (
+                    SELECT 1 FROM article_persons ap
+                    WHERE ap.article_id = ae.article_id
+                )
+              ))
+            """
+        )
+        results = session.execute(
+            stmt,
+            {"start": start, "end": end, "overwrite": overwrite},
+        ).all()
+
+    gpe_entities: dict[str, list[str]] = defaultdict(list)
+    person_entities: dict[str, list[str]] = defaultdict(list)
+
+    for row in results:
+        if row.entity_type == "GPE":
+            gpe_entities[row.article_id].append(row.entity_name.upper())
+        elif row.entity_type == "PERSON":
+            person_entities[row.article_id].append(row.entity_name.upper())
+
+    logger.info(
+        "Loaded %d GPE entities from %d articles and %d PERSON entities from %d articles",
+        sum(len(v) for v in gpe_entities.values()),
+        len(gpe_entities),
+        sum(len(v) for v in person_entities.values()),
+        len(person_entities),
+    )
+    return dict(gpe_entities), dict(person_entities)
+
+
+def load_location_aliases() -> dict[str, list]:
+    """
+    Load all location aliases with their candidate locations from RDS.
+
+    Returns: {ALIAS_UPPER: [LocationCandidate, ...]}
+    """
+    from collections import defaultdict
+
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+    from resolve_entities.models import LocationCandidate
+
+    logger.info("Loading location aliases from RDS")
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                UPPER(la.alias) as alias,
+                la.wikidata_qid,
+                l.name,
+                l.location_type,
+                l.country_code
+            FROM location_aliases la
+            JOIN locations l ON l.wikidata_qid = la.wikidata_qid
+            """
+        )
+        results = session.execute(stmt).all()
+
+    alias_to_locations: dict[str, list[LocationCandidate]] = defaultdict(list)
+    for row in results:
+        alias_to_locations[row.alias].append(
+            LocationCandidate(
+                wikidata_qid=row.wikidata_qid,
+                name=row.name,
+                location_type=row.location_type,
+                country_code=row.country_code,
+            )
+        )
+
+    logger.info("Loaded %d location aliases", len(alias_to_locations))
+    return dict(alias_to_locations)
+
+
+def load_person_aliases() -> dict[str, list]:
+    """
+    Load all person aliases with their candidate persons from RDS.
+
+    Returns: {ALIAS_UPPER: [PersonCandidate, ...]}
+    """
+    from collections import defaultdict
+
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+    from resolve_entities.models import PersonCandidate
+
+    logger.info("Loading person aliases from RDS")
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                UPPER(pa.alias) as alias,
+                pa.wikidata_qid,
+                p.name,
+                p.description,
+                p.nationalities
+            FROM person_aliases pa
+            JOIN persons p ON p.wikidata_qid = pa.wikidata_qid
+            """
+        )
+        results = session.execute(stmt).all()
+
+    alias_to_persons: dict[str, list[PersonCandidate]] = defaultdict(list)
+    for row in results:
+        alias_to_persons[row.alias].append(
+            PersonCandidate(
+                wikidata_qid=row.wikidata_qid,
+                name=row.name,
+                description=row.description,
+                nationalities=row.nationalities,
+            )
+        )
+
+    logger.info("Loaded %d person aliases", len(alias_to_persons))
+    return dict(alias_to_persons)
+
+
+def upload_resolved_locations(
+    locations: list,
+    session: Any,
+    overwrite: bool = False,
+) -> None:
+    """
+    Upload resolved article locations to RDS.
+
+    Args:
+        locations: List of ArticleLocation dataclass instances
+        session: SQLAlchemy session
+        overwrite: If True, delete existing locations for these articles first
+    """
+    from sqlalchemy import text
+
+    if not locations:
+        return
+
+    article_ids = sorted({loc.article_id for loc in locations})
+
+    if overwrite:
+        session.execute(
+            text("DELETE FROM article_locations WHERE article_id = ANY(:article_ids)"),
+            {"article_ids": article_ids},
+        )
+
+    records = [
+        {"article_id": loc.article_id, "wikidata_qid": loc.wikidata_qid, "name": loc.name}
+        for loc in locations
+    ]
+    session.execute(
+        text(
+            """
+            INSERT INTO article_locations (article_id, wikidata_qid, name)
+            VALUES (:article_id, :wikidata_qid, :name)
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        records,
+    )
+    session.commit()
+    logger.info("Upserted %d article locations into RDS", len(records))
+
+
+def upload_resolved_persons(
+    persons: list,
+    session: Any,
+    overwrite: bool = False,
+) -> None:
+    """
+    Upload resolved article persons to RDS.
+
+    Args:
+        persons: List of ArticlePerson dataclass instances
+        session: SQLAlchemy session
+        overwrite: If True, delete existing persons for these articles first
+    """
+    from sqlalchemy import text
+
+    if not persons:
+        return
+
+    article_ids = sorted({p.article_id for p in persons})
+
+    if overwrite:
+        session.execute(
+            text("DELETE FROM article_persons WHERE article_id = ANY(:article_ids)"),
+            {"article_ids": article_ids},
+        )
+
+    records = [
+        {"article_id": p.article_id, "wikidata_qid": p.wikidata_qid, "name": p.name}
+        for p in persons
+    ]
+    session.execute(
+        text(
+            """
+            INSERT INTO article_persons (article_id, wikidata_qid, name)
+            VALUES (:article_id, :wikidata_qid, :name)
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        records,
+    )
+    session.commit()
+    logger.info("Upserted %d article persons into RDS", len(records))
+
+
 def upload_clusters(
     clustered_articles: list[Any],
     session: Any,

@@ -14,9 +14,9 @@ on:
         description: 'Sources'
         type: string
         default: 'all'
-      # Shared date input for embed, entities, and resolve-locations
+      # Shared date input for embed, entities, and resolve-entities
       published-date:
-        description: 'Process articles published on this date (UTC, YYYY-MM-DD) - used for embed, entities, resolve-locations'
+        description: 'Process articles published on this date (UTC, YYYY-MM-DD) - used for embed, entities, resolve-entities'
         type: string
         default: ''
       # Shared overwrite input for all stages after ingest
@@ -133,10 +133,10 @@ jobs:
       load-s3: true
       load-rds: true
 
-  # Resolve locations after entities are extracted
-  resolve-locations:
+  # Resolve entities after entities are extracted
+  resolve-entities:
     needs: extract-entities
-    uses: ./.github/workflows/resolve_article_locations.yaml
+    uses: ./.github/workflows/resolve_entities.yaml
     secrets: inherit
     with:
       published-date: ${{ inputs.published-date || '' }}
@@ -158,9 +158,9 @@ jobs:
       load-rds: true
       overwrite-clusters: ${{ inputs.overwrite == true }}
 
-  # Generate and classify stories after clustering and location resolution
+  # Generate and classify stories after clustering and entity resolution
   generate-stories:
-    needs: [cluster, resolve-locations]
+    needs: [cluster, resolve-entities]
     uses: ./.github/workflows/generate_stories.yaml
     secrets: inherit
     with:
