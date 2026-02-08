@@ -576,6 +576,32 @@ def load_article_locations(article_ids: list[str]) -> dict[str, list[str]]:
     return article_locations
 
 
+def load_article_persons(article_ids: list[str]) -> dict[str, list[str]]:
+    """Load persons for articles. Returns {article_id: [wikidata_qid, ...]}."""
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    if not article_ids:
+        return {}
+
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT article_id, wikidata_qid
+            FROM article_persons
+            WHERE article_id = ANY(:article_ids)
+            """
+        )
+        results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
+
+    article_persons: dict[str, list[str]] = {}
+    for row in results:
+        article_persons.setdefault(row["article_id"], []).append(row["wikidata_qid"])
+
+    logger.info("Loaded persons for %d articles", len(article_persons))
+    return article_persons
+
+
 def upload_stories(
     stories: list[dict[str, Any]],
     session: Any,
@@ -602,7 +628,7 @@ def upload_stories(
     if overwrite:
         start, end = date_to_range(cluster_period)
         # Delete from junction tables first (foreign key constraints)
-        for table in ("story_locations", "article_stories", "story_topics"):
+        for table in ("story_locations", "story_persons", "article_stories", "story_topics"):
             session.execute(
                 text(
                     f"""
@@ -696,6 +722,30 @@ def upload_stories(
         logger.info(
             "Resolved locations for %d of %d stories",
             len(story_location_rows),
+            len(stories),
+        )
+
+    # Insert story_persons
+    story_person_rows = [
+        {"story_id": story["story_id"], "wikidata_qid": qid}
+        for story in stories
+        for qid in story.get("person_qids", [])
+    ]
+
+    if story_person_rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO story_persons (story_id, wikidata_qid)
+                VALUES (:story_id, :wikidata_qid)
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            story_person_rows,
+        )
+        logger.info(
+            "Resolved persons for %d of %d stories",
+            len({r["story_id"] for r in story_person_rows}),
             len(stories),
         )
 

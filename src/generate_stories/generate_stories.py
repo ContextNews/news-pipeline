@@ -4,7 +4,7 @@ from typing import Any
 
 from cronkite import Cronkite, CronkiteConfig
 
-from generate_stories.resolve_story_location import resolve_story_location
+from generate_stories.resolve_story_location import resolve_story_location, resolve_story_persons
 
 
 @dataclass
@@ -18,6 +18,7 @@ class GeneratedStoryOverview:
     sub_stories: list[dict[str, Any]]
     location: dict[str, Any] | None
     location_qid: str | None = None
+    person_qids: list[str] | None = None
 
 
 def _normalize_articles_for_cronkite(
@@ -75,6 +76,7 @@ def generate_story(
     cluster: list[dict[str, Any]],
     model: str = "gpt-4o-mini",
     article_locations: dict[str, list[str]] | None = None,
+    article_persons: dict[str, list[str]] | None = None,
 ) -> GeneratedStoryOverview:
     """Generate a story overview from a single cluster of related articles."""
     story_overview = generate_story_overview(
@@ -82,13 +84,20 @@ def generate_story(
         model=model,
     )
 
+    article_ids = story_overview.article_ids or [a["id"] for a in cluster]
+
     # Resolve location from article locations
     location_qid = None
     if article_locations:
-        article_ids = story_overview.article_ids or [a["id"] for a in cluster]
         location_qid = resolve_story_location(article_ids, article_locations)
 
+    # Resolve persons from article persons
+    person_qids = []
+    if article_persons:
+        person_qids = resolve_story_persons(article_ids, article_persons)
+
     story_overview.location_qid = location_qid
+    story_overview.person_qids = person_qids
     return story_overview
 
 def filter_artice_cluster(

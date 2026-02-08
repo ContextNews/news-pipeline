@@ -70,6 +70,7 @@ def build_story_record(
         "sub_stories": story.sub_stories,
         "location": story.location,
         "location_qid": story.location_qid,
+        "person_qids": story.person_qids or [],
         "noise_article_ids": story.noise_article_ids,
         "story_period": story_period.isoformat(),
         "generated_at": generated_at.isoformat(),

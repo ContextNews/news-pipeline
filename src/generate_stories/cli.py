@@ -11,7 +11,7 @@ from rds_postgres.connection import get_session
 
 from generate_stories.generate_stories import generate_story
 from generate_stories.helpers import parse_generate_stories_args, build_story_record
-from common.aws import load_clusters, load_article_locations, upload_stories, upload_jsonl_to_s3, build_s3_key
+from common.aws import load_clusters, load_article_locations, load_article_persons, upload_stories, upload_jsonl_to_s3, build_s3_key
 from common.cli_helpers import setup_logging, save_jsonl_local
 
 load_dotenv()
@@ -35,6 +35,7 @@ def main() -> None:
         for article in cluster["articles"]
     ]
     article_locations = load_article_locations(all_article_ids)
+    article_persons = load_article_persons(all_article_ids)
 
     # Generate stories for each cluster
     stories = []
@@ -46,7 +47,7 @@ def main() -> None:
 
         logger.info("Generating story for cluster %s with %d articles", cluster_id, len(articles))
         try:
-            story = generate_story(articles, model=args.model, article_locations=article_locations)
+            story = generate_story(articles, model=args.model, article_locations=article_locations, article_persons=article_persons)
             article_ids = story.article_ids or [article["id"] for article in articles]
             record = build_story_record(cluster_id, article_ids, story, cluster["cluster_period"], now)
             stories.append(record)

@@ -49,3 +49,34 @@ def resolve_story_location(
         max_count,
     )
     return result
+
+
+def resolve_story_persons(
+    article_ids: list[str],
+    article_persons: dict[str, list[str]],
+) -> list[str]:
+    """
+    Collect all distinct person QIDs from a story's articles.
+
+    Args:
+        article_ids: List of article IDs belonging to the story
+        article_persons: Mapping of article_id -> list of wikidata_qids
+
+    Returns:
+        Sorted list of unique wikidata_qids, or empty list if none found.
+    """
+    if not article_ids:
+        return []
+
+    qids: set[str] = set()
+    for article_id in article_ids:
+        persons = article_persons.get(article_id, [])
+        qids.update(persons)
+
+    if not qids:
+        logger.debug("No persons found for %d articles", len(article_ids))
+        return []
+
+    result = sorted(qids)
+    logger.debug("Resolved %d persons for story", len(result))
+    return result
