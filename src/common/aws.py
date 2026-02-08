@@ -628,6 +628,24 @@ def upload_stories(
     if overwrite:
         start, end = date_to_range(cluster_period)
         # Delete from junction tables first (foreign key constraints)
+        session.execute(
+            text(
+                """
+                DELETE FROM story_stories
+                WHERE story_id_1 IN (
+                    SELECT id FROM stories
+                    WHERE story_period >= :start
+                      AND story_period < :end
+                )
+                OR story_id_2 IN (
+                    SELECT id FROM stories
+                    WHERE story_period >= :start
+                      AND story_period < :end
+                )
+                """
+            ),
+            {"start": start, "end": end},
+        )
         for table in ("story_locations", "story_persons", "article_stories", "story_topics"):
             session.execute(
                 text(

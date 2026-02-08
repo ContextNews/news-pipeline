@@ -398,7 +398,7 @@ sqlalchemy = "^2.0.29"
 type = "git"
 url = "https://github.com/ContextNews/context-data-schemas.git"
 reference = "main"
-resolved_reference = "e083340618a085afd503bf30d48746ce5d69b68f"
+resolved_reference = "aa1d8bdc764daaca6991133fc072c1db2341449b"
 
 [[package]]
 name = "courlan"
@@ -438,7 +438,7 @@ python-dotenv = ">=1.0.0"
 type = "git"
 url = "https://github.com/ContextNews/Cronkite.git"
 reference = "HEAD"
-resolved_reference = "c752130f36211365504364d01cc1026664ad1c62"
+resolved_reference = "df85d210ae38d9cf6cac328a8870c34fb3889262"
 
 [[package]]
 name = "cssselect"
@@ -1501,7 +1501,7 @@ version = "2.0.2"
 description = "Fundamental package for array computing in Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "cluster_articles", "compute_embeddings", "dev", "extract_entities"]
+groups = ["main", "cluster_articles", "compute_embeddings", "dev", "extract_entities", "generate_stories"]
 files = [
     {file = "numpy-2.0.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:51129a29dbe56f9ca83438b706e2e69a39892b5eda6cedcb6b0c9fdc9b0d3ece"},
     {file = "numpy-2.0.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:f15975dfec0cf2239224d80e32c3170b1d168335eaedee69da84fbe9f1f9cd04"},
@@ -4073,4 +4073,4 @@ dev = ["pytest", "setuptools"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "6c8e8e05c4a07f86be258a72d3b3aa71915b39bc2fe506b0bda1e5ade0ebd7ad"
+content-hash = "b52a89041520e8e902b3c486f5a356ec9fd9c9b5c507c9a1c95c7b5686bd2ac7"

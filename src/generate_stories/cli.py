@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from rds_postgres.connection import get_session
@@ -79,6 +79,18 @@ def main() -> None:
         except Exception as e:
             logger.error("Failed to classify stories: %s", e)
 
+    # Link stories to related stories from the previous day
+    story_links = []
+    if args.link_stories:
+        from generate_stories.link_stories import link_stories
+
+        previous_date = args.cluster_period - timedelta(days=1)
+        try:
+            story_links = link_stories(stories, previous_date, model=args.model)
+            logger.info("Found %d story links to previous day", len(story_links))
+        except Exception as e:
+            logger.error("Failed to link stories: %s", e)
+
     if args.load_s3:
         bucket_key = build_s3_key(
             "generated_stories",
@@ -94,6 +106,10 @@ def main() -> None:
     if args.load_rds:
         with get_session() as session:
             upload_stories(stories, session, args.cluster_period, args.overwrite)
+            if args.link_stories and story_links:
+                from generate_stories.link_stories import save_story_links
+
+                save_story_links(story_links, session)
 
 
 if __name__ == "__main__":

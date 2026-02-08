@@ -50,6 +50,7 @@ numpy = ">=1.26"
 # Generate stories service dependencies
 [tool.poetry.group.generate_stories.dependencies]
 cronkite = {git = "https://github.com/ContextNews/Cronkite.git"}
+numpy = ">=1.26"
 openai = ">=1.0"
 
 # Development dependencies
