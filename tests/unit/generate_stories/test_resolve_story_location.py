@@ -1,8 +1,35 @@
-"""Tests for resolve_story_persons."""
+"""Tests for generate_stories.resolve_story_location module."""
 
 from __future__ import annotations
 
-from generate_stories.resolve_story_location import resolve_story_persons
+from generate_stories.resolve_story_location import (
+    resolve_story_location,
+    resolve_story_persons,
+)
+
+
+class TestResolveStoryLocation:
+    def test_most_common_qid(self) -> None:
+        article_locations = {
+            "a1": ["Q84", "Q142"],
+            "a2": ["Q84"],
+        }
+        result = resolve_story_location(["a1", "a2"], article_locations)
+        assert result == "Q84"
+
+    def test_tie_breaking_alphabetical(self) -> None:
+        article_locations = {
+            "a1": ["Q200"],
+            "a2": ["Q100"],
+        }
+        result = resolve_story_location(["a1", "a2"], article_locations)
+        assert result == "Q100"
+
+    def test_empty_article_ids(self) -> None:
+        assert resolve_story_location([], {"a1": ["Q1"]}) is None
+
+    def test_no_locations_returns_none(self) -> None:
+        assert resolve_story_location(["a1"], {}) is None
 
 
 class TestResolveStoryPersons:
@@ -28,9 +55,7 @@ class TestResolveStoryPersons:
         assert result == []
 
     def test_returns_empty_for_empty_article_ids(self) -> None:
-        article_persons = {"a1": ["Q1"]}
-        result = resolve_story_persons([], article_persons)
-        assert result == []
+        assert resolve_story_persons([], {"a1": ["Q1"]}) == []
 
     def test_ignores_articles_not_in_persons_map(self) -> None:
         article_persons = {"a1": ["Q1"]}

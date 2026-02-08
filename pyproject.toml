@@ -60,19 +60,10 @@ pandas = ">=2.0"
 [tool.pytest.ini_options]
 testpaths = [
     "tests",
-    "service_tests",
-    "services/news-ingest/tests",
-    "services/news-normalize/tests",
-    "services/news-cluster/tests",
-    "services/news-api/tests",
 ]
 pythonpath = [
     ".",
     "src",
-    "services/news-ingest",
-    "services/news-normalize",
-    "services/news-cluster",
-    "services/news-api",
 ]
 markers = [
     "integration: tests that call external services",
