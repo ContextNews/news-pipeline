@@ -36,7 +36,15 @@ def link_stories(
         previous_date and story_id_2 is from today.
     """
     if not today_stories:
+        logger.info("No today_stories provided, skipping linking")
         return []
+
+    logger.info(
+        "Linking %d stories from today against previous date %s",
+        len(today_stories), previous_date,
+    )
+    for s in today_stories:
+        logger.info("  today: '%s' (%s)", s.get("title", "?"), s["story_id"])
 
     # Collect unique candidate story IDs from previous date
     candidate_ids: set[str] = set()
@@ -51,17 +59,28 @@ def link_stories(
         logger.info("No candidate stories found for %s", previous_date)
         return []
 
+    logger.info("Collected %d unique candidate story IDs from %s", len(candidate_ids), previous_date)
+
     # Load full data for yesterday's candidates
     yesterday_stories = _load_stories_for_llm(list(candidate_ids))
 
     if not yesterday_stories:
+        logger.info("No yesterday stories loaded from DB for candidate IDs")
         return []
+
+    logger.info("Sending %d yesterday + %d today stories to LLM for grouping:", len(yesterday_stories), len(today_stories))
+    for i, s in enumerate(yesterday_stories):
+        logger.info("  group_a[%d]: '%s' (%s)", i, s["title"], s["story_id"])
+    for i, s in enumerate(today_stories):
+        logger.info("  group_b[%d]: '%s' (%s)", i, s.get("title", "?"), s["story_id"])
 
     # Use Cronkite LLM to confirm matches
     cronkite = Cronkite(model=model)
     links = cronkite.group_stories(
         group_a=yesterday_stories, group_b=today_stories
     )
+
+    logger.info("LLM returned %d link(s): %s", len(links), links)
 
     # Map index pairs back to story ID pairs
     result = []
@@ -71,7 +90,17 @@ def link_stories(
         if a_idx < len(yesterday_stories) and b_idx < len(today_stories):
             story_id_1 = yesterday_stories[a_idx]["story_id"]
             story_id_2 = today_stories[b_idx]["story_id"]
+            logger.info(
+                "  Linked: '%s' (%s) -> '%s' (%s)",
+                yesterday_stories[a_idx]["title"], story_id_1,
+                today_stories[b_idx]["title"], story_id_2,
+            )
             result.append((story_id_1, story_id_2))
+        else:
+            logger.warning(
+                "  LLM returned out-of-bounds indices: group_a_index=%d, group_b_index=%d",
+                a_idx, b_idx,
+            )
 
     logger.info(
         "Linked %d story pairs between %s and today", len(result), previous_date

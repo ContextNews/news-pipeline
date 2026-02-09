@@ -85,11 +85,15 @@ def main() -> None:
         from generate_stories.link_stories import link_stories
 
         previous_date = args.cluster_period - timedelta(days=1)
+        logger.info(
+            "Starting story linking: %d stories from %s against previous date %s",
+            len(stories), args.cluster_period, previous_date,
+        )
         try:
             story_links = link_stories(stories, previous_date, model=args.model)
             logger.info("Found %d story links to previous day", len(story_links))
         except Exception as e:
-            logger.error("Failed to link stories: %s", e)
+            logger.error("Failed to link stories: %s", e, exc_info=True)
 
     if args.load_s3:
         bucket_key = build_s3_key(

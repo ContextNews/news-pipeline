@@ -24,6 +24,8 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 # Ingest service dependencies
+[tool.poetry.group.ingest_articles]
+optional = true
 [tool.poetry.group.ingest_articles.dependencies]
 feedparser = ">=6.0.12,<7.0"
 requests = ">=2.32,<3.0"
@@ -32,28 +34,38 @@ trafilatura = ">=2.0,<3.0"
 readability-lxml = ">=0.8,<1.0"
 
 # Compute embeddings service dependencies
+[tool.poetry.group.compute_embeddings]
+optional = true
 [tool.poetry.group.compute_embeddings.dependencies]
 sentence-transformers = ">=2.2"
 numpy = ">=1.26"
 
 # Extract entities service dependencies
+[tool.poetry.group.extract_entities]
+optional = true
 [tool.poetry.group.extract_entities.dependencies]
 spacy = ">=3.7"
 spacy-transformers = ">=1.3"
 pycountry = ">=24.6"
 
 # Cluster articles service dependencies
+[tool.poetry.group.cluster_articles]
+optional = true
 [tool.poetry.group.cluster_articles.dependencies]
 hdbscan = ">=0.8.33"
 numpy = ">=1.26"
 
 # Generate stories service dependencies
+[tool.poetry.group.generate_stories]
+optional = true
 [tool.poetry.group.generate_stories.dependencies]
 cronkite = {git = "https://github.com/ContextNews/Cronkite.git"}
 numpy = ">=1.26"
 openai = ">=1.0"
 
 # Development dependencies
+[tool.poetry.group.dev]
+optional = true
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0"
 pandas = ">=2.0"

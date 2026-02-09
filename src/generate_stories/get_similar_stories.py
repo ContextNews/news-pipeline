@@ -1,6 +1,9 @@
+import logging
 from datetime import date
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def get_similar_stories(
@@ -29,7 +32,13 @@ def get_similar_stories(
         # Load candidates (stories on target_date excluding input)
         candidates = _load_stories_with_metadata(session, target_date, exclude_story_id=story_id)
         if not candidates:
+            logger.info("No candidate stories found on %s for story %s", target_date, story_id)
             return []
+
+        logger.info(
+            "Found %d candidate stories on %s to compare against '%s'",
+            len(candidates), target_date, input_story["title"],
+        )
 
         # Load embeddings for input + candidates
         all_story_ids = [story_id] + [c["story_id"] for c in candidates]
@@ -56,6 +65,11 @@ def get_similar_stories(
 
         combined = 0.6 * emb_sim + 0.2 * topic_sim + 0.2 * entity_sim
 
+        logger.debug(
+            "  candidate '%s' -> combined=%.3f (emb=%.3f, topic=%.3f, entity=%.3f)",
+            candidate["title"], combined, emb_sim, topic_sim, entity_sim,
+        )
+
         scored.append({
             "story_id": cid,
             "title": candidate["title"],
@@ -67,7 +81,22 @@ def get_similar_stories(
         })
 
     scored.sort(key=lambda x: x["similarity_score"], reverse=True)
-    return scored[:n]
+    top = scored[:n]
+
+    if top:
+        logger.info(
+            "Top %d similar stories for '%s':", len(top), input_story["title"],
+        )
+        for s in top:
+            logger.info(
+                "  [%.3f] '%s' (emb=%.3f, topic=%.3f, entity=%.3f)",
+                s["similarity_score"], s["title"],
+                s["embedding_similarity"], s["topic_similarity"], s["entity_similarity"],
+            )
+    else:
+        logger.info("No similar stories scored for '%s'", input_story["title"])
+
+    return top
 
 
 def _load_stories_with_metadata(session, target_date, exclude_story_id):
