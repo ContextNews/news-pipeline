@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Install dependencies
-poetry install --with dev,ingest_articles,compute_embeddings,extract_entities,cluster_articles,generate_stories
+poetry install --with dev,ingest_articles,compute_embeddings,extract_entities,cluster_articles,generate_stories,link_stories
 
 # Run tests
 poetry run pytest
@@ -20,6 +20,7 @@ poetry run python -m extract_entities --load-s3 --load-rds --published-date 2024
 poetry run python -m resolve_entities --load-s3 --load-rds --published-date 2024-01-01
 poetry run python -m cluster_articles --load-s3 --load-rds --ingested-date 2024-01-01
 poetry run python -m generate_stories --load-s3 --load-rds --cluster-period 2024-01-01
+poetry run python -m link_stories --date-a 2024-01-01 --date-b 2024-01-02 --load-rds
 ```
 
 ## Architecture
