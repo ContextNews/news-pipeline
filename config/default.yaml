@@ -1,0 +1,53 @@
+# Default production config — daily scheduled pipeline run.
+# Every setting is per-stage; empty "date" means "today" (resolved by child workflows).
+
+ingest:
+  lookback_hours: 12
+  sources: all
+  load_s3: true
+  load_rds: true
+
+embed:
+  date: ""
+  model: all-MiniLM-L6-v2
+  batch_size: 32
+  word_limit: 300
+  no_title: false
+  no_summary: false
+  no_text: false
+  overwrite: false
+  load_s3: true
+  load_rds: true
+
+entities:
+  date: ""
+  model: en_core_web_trf
+  batch_size: 32
+  word_limit: 300
+  overwrite: false
+  load_s3: true
+  load_rds: true
+
+resolve:
+  date: ""
+  overwrite: true
+  load_s3: true
+  load_rds: true
+
+cluster:
+  date: ""
+  embedding_model: all-MiniLM-L6-v2
+  min_cluster_size: 2
+  min_samples: 0
+  overwrite: true
+  load_s3: true
+  load_rds: true
+
+stories:
+  date: ""
+  model: gpt-4o-mini
+  classify: true
+  link_stories: true
+  overwrite: true
+  load_s3: true
+  load_rds: true

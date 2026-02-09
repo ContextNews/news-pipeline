@@ -5,167 +5,204 @@ on:
     - cron: "0 6,18 * * *"
   workflow_dispatch:
     inputs:
-      # Ingest inputs
-      ingest-lookback-hours:
-        description: 'Number of hours to look back for articles'
-        type: number
-        default: 12
-      ingest-sources:
-        description: 'Sources'
+      config:
+        description: 'Config profile name (filename without .yaml in config/)'
         type: string
-        default: 'all'
-      # Shared date input for embed, entities, and resolve-entities
-      published-date:
-        description: 'Process articles published on this date (UTC, YYYY-MM-DD) - used for embed, entities, resolve-entities'
-        type: string
-        default: ''
-      # Shared overwrite input for all stages after ingest
-      overwrite:
-        description: 'Re-process articles/clusters/stories even if already processed'
-        type: boolean
-        default: true
-      # Embed inputs
-      embed-model:
-        description: 'Sentence-transformers model name'
-        type: string
-        default: 'all-MiniLM-L6-v2'
-      embed-batch-size:
-        description: 'Batch size for encoding'
-        type: number
-        default: 32
-      embed-word-limit:
-        description: 'Embedded words limit'
-        type: number
-        default: 300
-      embed-no-title:
-        description: 'Exclude title from embedding'
-        type: boolean
-        default: false
-      embed-no-summary:
-        description: 'Exclude summary from embedding'
-        type: boolean
-        default: false
-      embed-no-text:
-        description: 'Exclude text from embedding'
-        type: boolean
-        default: false
-      # Extract entities inputs
-      entities-model:
-        description: 'spaCy model to use'
-        type: string
-        default: 'en_core_web_trf'
-      entities-batch-size:
-        description: 'Batch size for spaCy NER'
-        type: number
-        default: 32
-      entities-word-limit:
-        description: 'Entity extraction word limit'
-        type: number
-        default: 300
-      # Cluster inputs
-      cluster-ingested-date:
-        description: 'UTC date to load from RDS (YYYY-MM-DD)'
-        type: string
-        default: ''
-      cluster-embedding-model:
-        description: 'Embedding model to use'
-        type: string
-        default: 'all-MiniLM-L6-v2'
-      cluster-min-cluster-size:
-        description: 'Minimum cluster size'
-        type: number
-        default: 2
-      cluster-min-samples:
-        description: 'Minimum samples (leave empty for default)'
-        type: number
-        default: 0
-      # Cronkite (story generation & classification) inputs
-      cronkite-model:
-        description: 'OpenAI model for story generation and classification'
-        type: string
-        default: 'gpt-4o-mini'
-      stories-cluster-period:
-        description: 'UTC cluster period to process (YYYY-MM-DD)'
-        type: string
-        default: ''
+        default: 'default'
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  load-config:
+    runs-on: ubuntu-latest
+    outputs:
+      # ingest
+      ingest-lookback-hours: ${{ steps.parse.outputs.ingest-lookback-hours }}
+      ingest-sources: ${{ steps.parse.outputs.ingest-sources }}
+      ingest-load-s3: ${{ steps.parse.outputs.ingest-load-s3 }}
+      ingest-load-rds: ${{ steps.parse.outputs.ingest-load-rds }}
+      # embed
+      embed-date: ${{ steps.parse.outputs.embed-date }}
+      embed-model: ${{ steps.parse.outputs.embed-model }}
+      embed-batch-size: ${{ steps.parse.outputs.embed-batch-size }}
+      embed-word-limit: ${{ steps.parse.outputs.embed-word-limit }}
+      embed-no-title: ${{ steps.parse.outputs.embed-no-title }}
+      embed-no-summary: ${{ steps.parse.outputs.embed-no-summary }}
+      embed-no-text: ${{ steps.parse.outputs.embed-no-text }}
+      embed-overwrite: ${{ steps.parse.outputs.embed-overwrite }}
+      embed-load-s3: ${{ steps.parse.outputs.embed-load-s3 }}
+      embed-load-rds: ${{ steps.parse.outputs.embed-load-rds }}
+      # entities
+      entities-date: ${{ steps.parse.outputs.entities-date }}
+      entities-model: ${{ steps.parse.outputs.entities-model }}
+      entities-batch-size: ${{ steps.parse.outputs.entities-batch-size }}
+      entities-word-limit: ${{ steps.parse.outputs.entities-word-limit }}
+      entities-overwrite: ${{ steps.parse.outputs.entities-overwrite }}
+      entities-load-s3: ${{ steps.parse.outputs.entities-load-s3 }}
+      entities-load-rds: ${{ steps.parse.outputs.entities-load-rds }}
+      # resolve
+      resolve-date: ${{ steps.parse.outputs.resolve-date }}
+      resolve-overwrite: ${{ steps.parse.outputs.resolve-overwrite }}
+      resolve-load-s3: ${{ steps.parse.outputs.resolve-load-s3 }}
+      resolve-load-rds: ${{ steps.parse.outputs.resolve-load-rds }}
+      # cluster
+      cluster-date: ${{ steps.parse.outputs.cluster-date }}
+      cluster-embedding-model: ${{ steps.parse.outputs.cluster-embedding-model }}
+      cluster-min-cluster-size: ${{ steps.parse.outputs.cluster-min-cluster-size }}
+      cluster-min-samples: ${{ steps.parse.outputs.cluster-min-samples }}
+      cluster-overwrite: ${{ steps.parse.outputs.cluster-overwrite }}
+      cluster-load-s3: ${{ steps.parse.outputs.cluster-load-s3 }}
+      cluster-load-rds: ${{ steps.parse.outputs.cluster-load-rds }}
+      # stories
+      stories-date: ${{ steps.parse.outputs.stories-date }}
+      stories-model: ${{ steps.parse.outputs.stories-model }}
+      stories-classify: ${{ steps.parse.outputs.stories-classify }}
+      stories-link-stories: ${{ steps.parse.outputs.stories-link-stories }}
+      stories-overwrite: ${{ steps.parse.outputs.stories-overwrite }}
+      stories-load-s3: ${{ steps.parse.outputs.stories-load-s3 }}
+      stories-load-rds: ${{ steps.parse.outputs.stories-load-rds }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse config
+        id: parse
+        run: |
+          CONFIG="config/${{ inputs.config || 'default' }}.yaml"
+          if [ ! -f "$CONFIG" ]; then
+            echo "::error::Config file not found: $CONFIG"
+            exit 1
+          fi
+
+          # Helper: read a value, falling back to a default if null/missing
+          val() { yq -r "$1 // \"$2\"" "$CONFIG"; }
+
+          # ingest
+          echo "ingest-lookback-hours=$(val '.ingest.lookback_hours' '12')" >> "$GITHUB_OUTPUT"
+          echo "ingest-sources=$(val '.ingest.sources' 'all')" >> "$GITHUB_OUTPUT"
+          echo "ingest-load-s3=$(val '.ingest.load_s3' 'true')" >> "$GITHUB_OUTPUT"
+          echo "ingest-load-rds=$(val '.ingest.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
+          # embed
+          echo "embed-date=$(val '.embed.date' '')" >> "$GITHUB_OUTPUT"
+          echo "embed-model=$(val '.embed.model' 'all-MiniLM-L6-v2')" >> "$GITHUB_OUTPUT"
+          echo "embed-batch-size=$(val '.embed.batch_size' '32')" >> "$GITHUB_OUTPUT"
+          echo "embed-word-limit=$(val '.embed.word_limit' '300')" >> "$GITHUB_OUTPUT"
+          echo "embed-no-title=$(val '.embed.no_title' 'false')" >> "$GITHUB_OUTPUT"
+          echo "embed-no-summary=$(val '.embed.no_summary' 'false')" >> "$GITHUB_OUTPUT"
+          echo "embed-no-text=$(val '.embed.no_text' 'false')" >> "$GITHUB_OUTPUT"
+          echo "embed-overwrite=$(val '.embed.overwrite' 'true')" >> "$GITHUB_OUTPUT"
+          echo "embed-load-s3=$(val '.embed.load_s3' 'true')" >> "$GITHUB_OUTPUT"
+          echo "embed-load-rds=$(val '.embed.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
+          # entities
+          echo "entities-date=$(val '.entities.date' '')" >> "$GITHUB_OUTPUT"
+          echo "entities-model=$(val '.entities.model' 'en_core_web_trf')" >> "$GITHUB_OUTPUT"
+          echo "entities-batch-size=$(val '.entities.batch_size' '32')" >> "$GITHUB_OUTPUT"
+          echo "entities-word-limit=$(val '.entities.word_limit' '300')" >> "$GITHUB_OUTPUT"
+          echo "entities-overwrite=$(val '.entities.overwrite' 'true')" >> "$GITHUB_OUTPUT"
+          echo "entities-load-s3=$(val '.entities.load_s3' 'true')" >> "$GITHUB_OUTPUT"
+          echo "entities-load-rds=$(val '.entities.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
+          # resolve
+          echo "resolve-date=$(val '.resolve.date' '')" >> "$GITHUB_OUTPUT"
+          echo "resolve-overwrite=$(val '.resolve.overwrite' 'true')" >> "$GITHUB_OUTPUT"
+          echo "resolve-load-s3=$(val '.resolve.load_s3' 'true')" >> "$GITHUB_OUTPUT"
+          echo "resolve-load-rds=$(val '.resolve.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
+          # cluster
+          echo "cluster-date=$(val '.cluster.date' '')" >> "$GITHUB_OUTPUT"
+          echo "cluster-embedding-model=$(val '.cluster.embedding_model' 'all-MiniLM-L6-v2')" >> "$GITHUB_OUTPUT"
+          echo "cluster-min-cluster-size=$(val '.cluster.min_cluster_size' '2')" >> "$GITHUB_OUTPUT"
+          echo "cluster-min-samples=$(val '.cluster.min_samples' '0')" >> "$GITHUB_OUTPUT"
+          echo "cluster-overwrite=$(val '.cluster.overwrite' 'true')" >> "$GITHUB_OUTPUT"
+          echo "cluster-load-s3=$(val '.cluster.load_s3' 'true')" >> "$GITHUB_OUTPUT"
+          echo "cluster-load-rds=$(val '.cluster.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
+          # stories
+          echo "stories-date=$(val '.stories.date' '')" >> "$GITHUB_OUTPUT"
+          echo "stories-model=$(val '.stories.model' 'gpt-4o-mini')" >> "$GITHUB_OUTPUT"
+          echo "stories-classify=$(val '.stories.classify' 'true')" >> "$GITHUB_OUTPUT"
+          echo "stories-link-stories=$(val '.stories.link_stories' 'true')" >> "$GITHUB_OUTPUT"
+          echo "stories-overwrite=$(val '.stories.overwrite' 'true')" >> "$GITHUB_OUTPUT"
+          echo "stories-load-s3=$(val '.stories.load_s3' 'true')" >> "$GITHUB_OUTPUT"
+          echo "stories-load-rds=$(val '.stories.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
   ingest:
+    needs: load-config
     uses: ./.github/workflows/ingest_articles.yaml
     secrets: inherit
     with:
-      lookback-hours: ${{ fromJSON(inputs.ingest-lookback-hours || '12') }}
-      sources: ${{ inputs.ingest-sources || 'all' }}
-      load-s3: true
-      load-rds: true
+      lookback-hours: ${{ fromJSON(needs.load-config.outputs.ingest-lookback-hours) }}
+      sources: ${{ needs.load-config.outputs.ingest-sources }}
+      load-s3: ${{ fromJSON(needs.load-config.outputs.ingest-load-s3) }}
+      load-rds: ${{ fromJSON(needs.load-config.outputs.ingest-load-rds) }}
 
   # Embed and extract-entities run in parallel after ingest
   embed:
-    needs: ingest
+    needs: [ingest, load-config]
     uses: ./.github/workflows/compute_embeddings.yaml
     secrets: inherit
     with:
-      published-date: ${{ inputs.published-date || '' }}
-      model: ${{ inputs.embed-model || 'all-MiniLM-L6-v2' }}
-      batch-size: ${{ fromJSON(inputs.embed-batch-size || '32') }}
-      word-limit: ${{ fromJSON(inputs.embed-word-limit || '300') }}
-      no-title: ${{ inputs.embed-no-title == true }}
-      no-summary: ${{ inputs.embed-no-summary == true }}
-      no-text: ${{ inputs.embed-no-text == true }}
-      overwrite: ${{ inputs.overwrite == true }}
-      load-s3: true
-      load-rds: true
+      published-date: ${{ needs.load-config.outputs.embed-date }}
+      model: ${{ needs.load-config.outputs.embed-model }}
+      batch-size: ${{ fromJSON(needs.load-config.outputs.embed-batch-size) }}
+      word-limit: ${{ fromJSON(needs.load-config.outputs.embed-word-limit) }}
+      no-title: ${{ fromJSON(needs.load-config.outputs.embed-no-title) }}
+      no-summary: ${{ fromJSON(needs.load-config.outputs.embed-no-summary) }}
+      no-text: ${{ fromJSON(needs.load-config.outputs.embed-no-text) }}
+      overwrite: ${{ fromJSON(needs.load-config.outputs.embed-overwrite) }}
+      load-s3: ${{ fromJSON(needs.load-config.outputs.embed-load-s3) }}
+      load-rds: ${{ fromJSON(needs.load-config.outputs.embed-load-rds) }}
 
   extract-entities:
-    needs: ingest
+    needs: [ingest, load-config]
     uses: ./.github/workflows/extract_entities.yaml
     secrets: inherit
     with:
-      published-date: ${{ inputs.published-date || '' }}
-      model: ${{ inputs.entities-model || 'en_core_web_trf' }}
-      batch-size: ${{ fromJSON(inputs.entities-batch-size || '32') }}
-      word-limit: ${{ fromJSON(inputs.entities-word-limit || '300') }}
-      overwrite: ${{ inputs.overwrite == true }}
-      load-s3: true
-      load-rds: true
+      published-date: ${{ needs.load-config.outputs.entities-date }}
+      model: ${{ needs.load-config.outputs.entities-model }}
+      batch-size: ${{ fromJSON(needs.load-config.outputs.entities-batch-size) }}
+      word-limit: ${{ fromJSON(needs.load-config.outputs.entities-word-limit) }}
+      overwrite: ${{ fromJSON(needs.load-config.outputs.entities-overwrite) }}
+      load-s3: ${{ fromJSON(needs.load-config.outputs.entities-load-s3) }}
+      load-rds: ${{ fromJSON(needs.load-config.outputs.entities-load-rds) }}
 
   # Resolve entities after entities are extracted
   resolve-entities:
-    needs: extract-entities
+    needs: [extract-entities, load-config]
     uses: ./.github/workflows/resolve_entities.yaml
     secrets: inherit
     with:
-      published-date: ${{ inputs.published-date || '' }}
-      overwrite: ${{ inputs.overwrite == true }}
-      load-s3: true
-      load-rds: true
+      published-date: ${{ needs.load-config.outputs.resolve-date }}
+      overwrite: ${{ fromJSON(needs.load-config.outputs.resolve-overwrite) }}
+      load-s3: ${{ fromJSON(needs.load-config.outputs.resolve-load-s3) }}
+      load-rds: ${{ fromJSON(needs.load-config.outputs.resolve-load-rds) }}
 
   # Cluster only needs embeddings
   cluster:
-    needs: embed
+    needs: [embed, load-config]
     uses: ./.github/workflows/cluster_articles.yaml
     secrets: inherit
     with:
-      ingested-date: ${{ inputs.cluster-ingested-date || '' }}
-      embedding-model: ${{ inputs.cluster-embedding-model || 'all-MiniLM-L6-v2' }}
-      min-cluster-size: ${{ fromJSON(inputs.cluster-min-cluster-size || '2') }}
-      min-samples: ${{ fromJSON(inputs.cluster-min-samples || '0') }}
-      load-s3: true
-      load-rds: true
-      overwrite-clusters: ${{ inputs.overwrite == true }}
+      ingested-date: ${{ needs.load-config.outputs.cluster-date }}
+      embedding-model: ${{ needs.load-config.outputs.cluster-embedding-model }}
+      min-cluster-size: ${{ fromJSON(needs.load-config.outputs.cluster-min-cluster-size) }}
+      min-samples: ${{ fromJSON(needs.load-config.outputs.cluster-min-samples) }}
+      overwrite-clusters: ${{ fromJSON(needs.load-config.outputs.cluster-overwrite) }}
+      load-s3: ${{ fromJSON(needs.load-config.outputs.cluster-load-s3) }}
+      load-rds: ${{ fromJSON(needs.load-config.outputs.cluster-load-rds) }}
 
   # Generate and classify stories after clustering and entity resolution
   generate-stories:
-    needs: [cluster, resolve-entities]
+    needs: [cluster, resolve-entities, load-config]
     uses: ./.github/workflows/generate_stories.yaml
     secrets: inherit
     with:
-      cluster-period: ${{ inputs.stories-cluster-period || '' }}
-      model: ${{ inputs.cronkite-model || 'gpt-4o-mini' }}
-      load-s3: true
-      load-rds: true
-      overwrite: ${{ inputs.overwrite == true }}
+      cluster-period: ${{ needs.load-config.outputs.stories-date }}
+      model: ${{ needs.load-config.outputs.stories-model }}
+      classify: ${{ fromJSON(needs.load-config.outputs.stories-classify) }}
+      link-stories: ${{ fromJSON(needs.load-config.outputs.stories-link-stories) }}
+      overwrite: ${{ fromJSON(needs.load-config.outputs.stories-overwrite) }}
+      load-s3: ${{ fromJSON(needs.load-config.outputs.stories-load-s3) }}
+      load-rds: ${{ fromJSON(needs.load-config.outputs.stories-load-rds) }}

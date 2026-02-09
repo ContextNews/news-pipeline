@@ -1,0 +1,53 @@
+# Backfill config — re-process a specific date, write to RDS only.
+# Adjust the date fields below before triggering.
+
+ingest:
+  lookback_hours: 24
+  sources: all
+  load_s3: false
+  load_rds: true
+
+embed:
+  date: "2026-02-01"
+  model: all-MiniLM-L6-v2
+  batch_size: 64
+  word_limit: 300
+  no_title: false
+  no_summary: false
+  no_text: false
+  overwrite: true
+  load_s3: false
+  load_rds: true
+
+entities:
+  date: "2026-02-01"
+  model: en_core_web_trf
+  batch_size: 64
+  word_limit: 300
+  overwrite: true
+  load_s3: false
+  load_rds: true
+
+resolve:
+  date: "2026-02-01"
+  overwrite: true
+  load_s3: false
+  load_rds: true
+
+cluster:
+  date: "2026-02-01"
+  embedding_model: all-MiniLM-L6-v2
+  min_cluster_size: 2
+  min_samples: 0
+  overwrite: true
+  load_s3: false
+  load_rds: true
+
+stories:
+  date: "2026-02-01"
+  model: gpt-4o-mini
+  classify: true
+  link_stories: true
+  overwrite: true
+  load_s3: false
+  load_rds: true

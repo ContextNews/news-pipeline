@@ -21,6 +21,9 @@ on:
       classify:
         type: boolean
         default: true
+      link-stories:
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       cluster-period:
@@ -46,6 +49,10 @@ on:
         default: true
       classify:
         description: 'Classify stories by topic after generation'
+        type: boolean
+        default: true
+      link-stories:
+        description: 'Link stories to related stories from the previous day'
         type: boolean
         default: true
 
@@ -123,6 +130,9 @@ jobs:
           fi
           if [ "${{ inputs.classify }}" = "false" ]; then
             ARGS="$ARGS --no-classify"
+          fi
+          if [ "${{ inputs.link-stories }}" = "false" ]; then
+            ARGS="$ARGS --no-link-stories"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 

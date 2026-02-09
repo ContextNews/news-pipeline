@@ -67,3 +67,16 @@ with get_session() as session:
 ### GitHub Actions
 
 The pipeline runs via GitHub Actions (`.github/workflows/`). The `run_pipeline.yaml` workflow orchestrates all stages and runs on a schedule (06:00 and 18:00 UTC). Individual stage workflows can be triggered manually. RDS access uses an SSH tunnel through a bastion host.
+
+#### Config Profiles
+
+Pipeline settings are defined in YAML config files under `config/`. The orchestrator workflow accepts a single `config` input (the filename without `.yaml`):
+
+- `config/default.yaml` — production defaults (used by the scheduled run)
+- `config/backfill.yaml` — example backfill profile with specific dates, S3 disabled
+
+Every setting is per-stage (no shared `overwrite` or `published-date`). To create a new profile, copy `default.yaml` and adjust values. Trigger manually with:
+
+```
+gh workflow run "Run Pipeline" -f config=backfill
+```
