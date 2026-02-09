@@ -37,13 +37,13 @@ Config profiles currently included:
 
 ```mermaid
 flowchart TD
-    A[run_pipeline.yaml trigger<br/>schedule or workflow_dispatch(config)] --> B[load-config]
-    B --> C[ingest]
-    C --> D[embed]
-    C --> E[extract-entities]
-    E --> F[resolve-entities]
-    D --> G[cluster]
-    F --> H[generate-stories]
+    A["run_pipeline trigger: schedule or workflow_dispatch config"] --> B["load-config"]
+    B --> C["ingest"]
+    C --> D["embed"]
+    C --> E["extract-entities"]
+    E --> F["resolve-entities"]
+    D --> G["cluster"]
+    F --> H["generate-stories"]
     G --> H
 ```
 
