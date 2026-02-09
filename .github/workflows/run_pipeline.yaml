@@ -75,7 +75,8 @@ jobs:
           fi
 
           # Helper: read a value, falling back to a default if null/missing
-          val() { yq -r "$1 // \"$2\"" "$CONFIG"; }
+          # Uses explicit null check instead of // which treats false and 0 as falsy
+          val() { yq -r "if $1 == null then \"$2\" else $1 end" "$CONFIG"; }
 
           # ingest
           echo "ingest-lookback-hours=$(val '.ingest.lookback_hours' '12')" >> "$GITHUB_OUTPUT"
