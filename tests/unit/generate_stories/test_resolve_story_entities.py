@@ -1,8 +1,8 @@
-"""Tests for generate_stories.resolve_story_location module."""
+"""Tests for generate_stories.resolve_story_entities module."""
 
 from __future__ import annotations
 
-from generate_stories.resolve_story_location import (
+from generate_stories.resolve_story_entities import (
     resolve_story_location,
     resolve_story_persons,
 )

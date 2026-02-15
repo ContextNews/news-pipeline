@@ -4,7 +4,7 @@ from typing import Any
 
 from cronkite import Cronkite, CronkiteConfig
 
-from generate_stories.resolve_story_location import resolve_story_location, resolve_story_persons
+from generate_stories.resolve_story_entities import resolve_story_location, resolve_story_persons
 
 
 @dataclass

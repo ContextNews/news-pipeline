@@ -41,17 +41,38 @@ def main() -> None:
     stories = []
     now = datetime.now(timezone.utc)
 
-    for cluster in clusters:
+    for i, cluster in enumerate(clusters, 1):
         cluster_id = cluster["cluster_id"]
         articles = cluster["articles"]
 
-        logger.info("Generating story for cluster %s with %d articles", cluster_id, len(articles))
+        logger.info(
+            "--- Cluster %d/%d [%s] — %d articles ---",
+            i, len(clusters), cluster_id, len(articles),
+        )
+        for article in articles:
+            article_id = article.get("id", "?")
+            title = article.get("title", "untitled")
+            source = article.get("source_name", article.get("source", "unknown"))
+            published = article.get("published_at", "?")
+            locations = article_locations.get(article_id, [])
+            persons = article_persons.get(article_id, [])
+            logger.info(
+                "  Article %s | %s | source=%s | published=%s | locations=%s | persons=%s",
+                article_id, title, source, published, locations, persons,
+            )
+
         try:
             story = generate_story(articles, model=args.model, article_locations=article_locations, article_persons=article_persons)
             article_ids = story.article_ids or [article["id"] for article in articles]
             record = build_story_record(cluster_id, article_ids, story, cluster["cluster_period"], now)
             stories.append(record)
-            logger.info("Generated story: %s", story.title)
+
+            logger.info("  Story title:    %s", story.title)
+            logger.info("  Story summary:  %s", story.summary[:200] if story.summary else "")
+            logger.info("  Key points:     %s", story.key_points)
+            logger.info("  Article IDs:    %d kept, %d noise", len(article_ids), len(story.noise_article_ids))
+            logger.info("  Location QID:   %s", story.location_qid)
+            logger.info("  Person QIDs:    %s", story.person_qids)
         except Exception as e:
             logger.error("Failed to generate story for cluster %s: %s", cluster_id, e)
             continue
