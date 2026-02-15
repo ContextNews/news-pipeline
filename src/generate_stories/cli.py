@@ -71,6 +71,11 @@ def main() -> None:
             logger.info("  Story summary:  %s", story.summary[:200] if story.summary else "")
             logger.info("  Key points:     %s", story.key_points)
             logger.info("  Article IDs:    %d kept, %d noise", len(article_ids), len(story.noise_article_ids))
+            articles_by_id = {a["id"]: a for a in articles}
+            for aid in article_ids:
+                logger.info("    kept:  %s — %s", aid, articles_by_id.get(aid, {}).get("title", "untitled"))
+            for aid in story.noise_article_ids:
+                logger.info("    noise: %s — %s", aid, articles_by_id.get(aid, {}).get("title", "untitled"))
             logger.info("  Location QID:   %s", story.location_qid)
             logger.info("  Person QIDs:    %s", story.person_qids)
         except Exception as e:
