@@ -1,0 +1,150 @@
+name: Classify Articles
+
+on:
+  workflow_call:
+    inputs:
+      published-date:
+        type: string
+        default: ''
+      model:
+        type: string
+        default: 'ContextNews/news-classifier'
+      batch-size:
+        type: number
+        default: 32
+      threshold:
+        type: string
+        default: '0.5'
+      word-limit:
+        type: number
+        default: 0
+      overwrite:
+        type: boolean
+        default: false
+      load-s3:
+        type: boolean
+        default: true
+      load-rds:
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      published-date:
+        description: 'UTC published date to classify (YYYY-MM-DD)'
+        type: string
+        required: false
+        default: ''
+      model:
+        description: 'HuggingFace text-classification model'
+        type: string
+        default: 'ContextNews/news-classifier'
+      batch-size:
+        description: 'Batch size for inference'
+        type: number
+        default: 32
+      threshold:
+        description: 'Minimum sigmoid score for a label to be included'
+        type: string
+        default: '0.5'
+      word-limit:
+        description: 'Max words in input text (0 for no limit)'
+        type: number
+        default: 0
+      overwrite:
+        description: 'Re-classify articles that already have topic assignments'
+        type: boolean
+        default: false
+      load-s3:
+        description: 'Upload results to S3'
+        type: boolean
+        default: true
+      load-rds:
+        description: 'Load topics into RDS'
+        type: boolean
+        default: true
+
+jobs:
+  classify-articles:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Set up SSH tunnel
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BASTION_SSH_KEY }}" > ~/.ssh/bastion_key
+          chmod 600 ~/.ssh/bastion_key
+
+          ssh-keyscan -H ${{ secrets.BASTION_IP }} >> ~/.ssh/known_hosts 2>&1
+
+          ssh -f -N -L 5432:${{ secrets.RDS_ENDPOINT }}:5432 \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=60 \
+            -i ~/.ssh/bastion_key \
+            ec2-user@${{ secrets.BASTION_IP }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-classify-articles-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --with classify_articles
+
+      - name: Build command arguments
+        id: build-args
+        run: |
+          if [ -n "${{ inputs.published-date }}" ]; then
+            ARGS="--published-date ${{ inputs.published-date }}"
+          else
+            ARGS="--published-date $(date -u +%F)"
+          fi
+          ARGS="$ARGS --model ${{ inputs.model }}"
+          ARGS="$ARGS --batch-size ${{ inputs.batch-size }}"
+          ARGS="$ARGS --threshold ${{ inputs.threshold }}"
+          if [ "${{ inputs.word-limit }}" -gt 0 ]; then
+            ARGS="$ARGS --word-limit ${{ inputs.word-limit }}"
+          fi
+          if [ "${{ inputs.overwrite }}" = "true" ]; then
+            ARGS="$ARGS --overwrite"
+          fi
+          if [ "${{ inputs.load-s3 }}" = "true" ]; then
+            ARGS="$ARGS --load-s3"
+          fi
+          if [ "${{ inputs.load-rds }}" = "true" ]; then
+            ARGS="$ARGS --load-rds"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Run classify_articles
+        env:
+          PYTHONPATH: src
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD }}@localhost:5432/contextdb
+        run: poetry run python -m classify_articles ${{ steps.build-args.outputs.args }}

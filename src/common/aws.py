@@ -1042,6 +1042,114 @@ def upload_resolved_persons(
     logger.info("Upserted %d article persons into RDS", len(records))
 
 
+def load_articles_for_classification(
+    published_date: date,
+    overwrite: bool,
+) -> list[dict]:
+    """
+    Load articles from RDS for a specific published date (UTC).
+
+    Args:
+        published_date: Date to load articles for
+        overwrite: If True, include articles that already have topic assignments
+
+    Returns:
+        List of article dicts with fields: id, title, summary, text
+    """
+    from sqlalchemy import text
+    from rds_postgres.connection import get_session
+
+    start, end = date_to_range(published_date)
+
+    logger.info("Loading articles published from %s to %s", start.isoformat(), end.isoformat())
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT a.id, a.title, a.summary, a.text
+            FROM articles a
+            WHERE a.published_at >= :start
+              AND a.published_at < :end
+              AND (:overwrite OR NOT EXISTS (
+                    SELECT 1
+                    FROM article_topics t
+                    WHERE t.article_id = a.id
+                ))
+            """
+        )
+        results = session.execute(
+            stmt,
+            {"start": start, "end": end, "overwrite": overwrite},
+        ).mappings().all()
+        articles = [dict(row) for row in results]
+
+    logger.info("Loaded %d articles from RDS", len(articles))
+    return articles
+
+
+def upload_article_topics(
+    classified_articles: list[Any],
+    session: Any,
+    overwrite: bool = False,
+) -> None:
+    """
+    Upload article topic classifications to RDS PostgreSQL.
+
+    Ensures topic labels exist in the topics table, then inserts article_topics
+    records. Deletes existing records first if overwrite=True.
+
+    Args:
+        classified_articles: List of ClassifiedArticle objects with article_id and topics fields
+        session: SQLAlchemy session
+        overwrite: If True, delete existing topic assignments for these articles first
+    """
+    from sqlalchemy import text
+
+    if not classified_articles:
+        logger.warning("No classified articles to upload")
+        return
+
+    # Collect all unique topics and ensure they exist
+    all_topics = sorted({topic for ca in classified_articles for topic in ca.topics})
+    if all_topics:
+        session.execute(
+            text("INSERT INTO topics (topic) VALUES (:topic) ON CONFLICT DO NOTHING"),
+            [{"topic": t} for t in all_topics],
+        )
+
+    # Delete existing topic assignments if overwrite
+    article_ids = [ca.article_id for ca in classified_articles]
+    if overwrite and article_ids:
+        session.execute(
+            text("DELETE FROM article_topics WHERE article_id = ANY(:article_ids)"),
+            {"article_ids": article_ids},
+        )
+
+    # Insert article-topic relationships
+    rows = [
+        {"article_id": ca.article_id, "topic": topic}
+        for ca in classified_articles
+        for topic in ca.topics
+    ]
+    if rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO article_topics (article_id, topic)
+                VALUES (:article_id, :topic)
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            rows,
+        )
+
+    session.commit()
+    logger.info(
+        "Uploaded topics for %d articles (%d topic assignments) to RDS",
+        len(article_ids),
+        len(rows),
+    )
+
+
 def upload_clusters(
     clustered_articles: list[Any],
     session: Any,
