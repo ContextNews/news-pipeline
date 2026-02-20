@@ -86,7 +86,7 @@ def classify_articles(
     texts = [a[1] for a in valid_articles]
 
     logger.info("Classifying %d articles (batch_size=%d)", len(texts), batch_size)
-    predictions = classifier(texts, batch_size=batch_size)
+    predictions = classifier(texts, batch_size=batch_size, truncation=True)
 
     results = []
     for article_id, preds in zip(article_ids, predictions):

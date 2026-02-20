@@ -39,6 +39,15 @@ def main() -> None:
         logger.warning("No articles classified")
         return
 
+    titles_by_id = {a["id"]: a.get("title", "untitled") for a in articles}
+    for result in results:
+        logger.info(
+            "  %s | %s | topics=%s",
+            result.article_id,
+            titles_by_id.get(result.article_id, "untitled"),
+            result.topics,
+        )
+
     if args.load_s3:
         upload_jsonl_records_to_s3(results, "classified_articles")
 
