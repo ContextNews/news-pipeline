@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from transformers import pipeline as hf_pipeline
+from transformers import AutoTokenizer, pipeline as hf_pipeline
 
 from classify_articles.models import ClassifiedArticle
 from common.utils import get_value
@@ -80,7 +80,9 @@ def classify_articles(
         return []
 
     logger.info("Loading model: %s", model)
-    classifier = hf_pipeline("text-classification", model=model, top_k=None)
+    tokenizer = AutoTokenizer.from_pretrained(model)
+    tokenizer.model_input_names = [n for n in tokenizer.model_input_names if n != "token_type_ids"]
+    classifier = hf_pipeline("text-classification", model=model, tokenizer=tokenizer, top_k=None)
 
     article_ids = [a[0] for a in valid_articles]
     texts = [a[1] for a in valid_articles]
