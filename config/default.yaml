@@ -43,6 +43,16 @@ cluster:
   load_s3: true
   load_rds: true
 
+classify:
+  date: ""
+  model: ContextNews/news-classifier
+  batch_size: 32
+  threshold: "0.5"
+  word_limit: 0
+  overwrite: false
+  load_s3: true
+  load_rds: true
+
 stories:
   date: ""
   model: gpt-4o-mini

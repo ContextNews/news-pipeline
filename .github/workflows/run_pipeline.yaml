@@ -55,6 +55,15 @@ jobs:
       cluster-overwrite: ${{ steps.parse.outputs.cluster-overwrite }}
       cluster-load-s3: ${{ steps.parse.outputs.cluster-load-s3 }}
       cluster-load-rds: ${{ steps.parse.outputs.cluster-load-rds }}
+      # classify
+      classify-date: ${{ steps.parse.outputs.classify-date }}
+      classify-model: ${{ steps.parse.outputs.classify-model }}
+      classify-batch-size: ${{ steps.parse.outputs.classify-batch-size }}
+      classify-threshold: ${{ steps.parse.outputs.classify-threshold }}
+      classify-word-limit: ${{ steps.parse.outputs.classify-word-limit }}
+      classify-overwrite: ${{ steps.parse.outputs.classify-overwrite }}
+      classify-load-s3: ${{ steps.parse.outputs.classify-load-s3 }}
+      classify-load-rds: ${{ steps.parse.outputs.classify-load-rds }}
       # stories
       stories-date: ${{ steps.parse.outputs.stories-date }}
       stories-model: ${{ steps.parse.outputs.stories-model }}
@@ -121,6 +130,16 @@ jobs:
           echo "cluster-load-s3=$(val '.cluster.load_s3' 'true')" >> "$GITHUB_OUTPUT"
           echo "cluster-load-rds=$(val '.cluster.load_rds' 'true')" >> "$GITHUB_OUTPUT"
 
+          # classify
+          echo "classify-date=$(val '.classify.date' '')" >> "$GITHUB_OUTPUT"
+          echo "classify-model=$(val '.classify.model' 'ContextNews/news-classifier')" >> "$GITHUB_OUTPUT"
+          echo "classify-batch-size=$(val '.classify.batch_size' '32')" >> "$GITHUB_OUTPUT"
+          echo "classify-threshold=$(val '.classify.threshold' '0.5')" >> "$GITHUB_OUTPUT"
+          echo "classify-word-limit=$(val '.classify.word_limit' '0')" >> "$GITHUB_OUTPUT"
+          echo "classify-overwrite=$(val '.classify.overwrite' 'false')" >> "$GITHUB_OUTPUT"
+          echo "classify-load-s3=$(val '.classify.load_s3' 'true')" >> "$GITHUB_OUTPUT"
+          echo "classify-load-rds=$(val '.classify.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
           # stories
           echo "stories-date=$(val '.stories.date' '')" >> "$GITHUB_OUTPUT"
           echo "stories-model=$(val '.stories.model' 'gpt-4o-mini')" >> "$GITHUB_OUTPUT"
@@ -140,7 +159,7 @@ jobs:
       load-s3: ${{ fromJSON(needs.load-config.outputs.ingest-load-s3) }}
       load-rds: ${{ fromJSON(needs.load-config.outputs.ingest-load-rds) }}
 
-  # Embed and extract-entities run in parallel after ingest
+  # Embed, extract-entities, and classify run in parallel after ingest
   embed:
     needs: [ingest, load-config]
     uses: ./.github/workflows/compute_embeddings.yaml
@@ -170,6 +189,20 @@ jobs:
       load-s3: ${{ fromJSON(needs.load-config.outputs.entities-load-s3) }}
       load-rds: ${{ fromJSON(needs.load-config.outputs.entities-load-rds) }}
 
+  classify:
+    needs: [ingest, load-config]
+    uses: ./.github/workflows/classify_articles.yaml
+    secrets: inherit
+    with:
+      published-date: ${{ needs.load-config.outputs.classify-date }}
+      model: ${{ needs.load-config.outputs.classify-model }}
+      batch-size: ${{ fromJSON(needs.load-config.outputs.classify-batch-size) }}
+      threshold: ${{ needs.load-config.outputs.classify-threshold }}
+      word-limit: ${{ fromJSON(needs.load-config.outputs.classify-word-limit) }}
+      overwrite: ${{ fromJSON(needs.load-config.outputs.classify-overwrite) }}
+      load-s3: ${{ fromJSON(needs.load-config.outputs.classify-load-s3) }}
+      load-rds: ${{ fromJSON(needs.load-config.outputs.classify-load-rds) }}
+
   # Resolve entities after entities are extracted
   resolve-entities:
     needs: [extract-entities, load-config]
@@ -195,9 +228,9 @@ jobs:
       load-s3: ${{ fromJSON(needs.load-config.outputs.cluster-load-s3) }}
       load-rds: ${{ fromJSON(needs.load-config.outputs.cluster-load-rds) }}
 
-  # Generate and classify stories after clustering and entity resolution
+  # Generate stories after clustering, entity resolution, and article classification
   generate-stories:
-    needs: [cluster, resolve-entities, load-config]
+    needs: [cluster, resolve-entities, classify, load-config]
     uses: ./.github/workflows/generate_stories.yaml
     secrets: inherit
     with:

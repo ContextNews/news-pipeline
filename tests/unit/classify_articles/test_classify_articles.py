@@ -50,8 +50,9 @@ class TestBuildInputText:
 
 
 class TestClassifyArticles:
+    @patch("classify_articles.classify_articles.AutoTokenizer")
     @patch("classify_articles.classify_articles.hf_pipeline")
-    def test_happy_path(self, mock_pipeline) -> None:
+    def test_happy_path(self, mock_pipeline, mock_tokenizer) -> None:
         mock_classifier = MagicMock()
         mock_classifier.return_value = [
             [
@@ -74,8 +75,9 @@ class TestClassifyArticles:
         assert result[0].scores["sports"] == 0.1
         assert result[0].scores["technology"] == 0.7
 
+    @patch("classify_articles.classify_articles.AutoTokenizer")
     @patch("classify_articles.classify_articles.hf_pipeline")
-    def test_custom_threshold(self, mock_pipeline) -> None:
+    def test_custom_threshold(self, mock_pipeline, mock_tokenizer) -> None:
         mock_classifier = MagicMock()
         mock_classifier.return_value = [
             [
@@ -91,8 +93,9 @@ class TestClassifyArticles:
 
         assert result[0].topics == ["politics"]
 
+    @patch("classify_articles.classify_articles.AutoTokenizer")
     @patch("classify_articles.classify_articles.hf_pipeline")
-    def test_no_labels_above_threshold(self, mock_pipeline) -> None:
+    def test_no_labels_above_threshold(self, mock_pipeline, mock_tokenizer) -> None:
         mock_classifier = MagicMock()
         mock_classifier.return_value = [
             [
@@ -108,8 +111,9 @@ class TestClassifyArticles:
         assert result[0].topics == []
         assert result[0].scores == {"politics": 0.1, "sports": 0.2}
 
+    @patch("classify_articles.classify_articles.AutoTokenizer")
     @patch("classify_articles.classify_articles.hf_pipeline")
-    def test_filters_missing_id(self, mock_pipeline) -> None:
+    def test_filters_missing_id(self, mock_pipeline, mock_tokenizer) -> None:
         mock_classifier = MagicMock()
         mock_classifier.return_value = [
             [{"label": "politics", "score": 0.9}],
@@ -125,8 +129,9 @@ class TestClassifyArticles:
         assert len(result) == 1
         assert result[0].article_id == "a1"
 
+    @patch("classify_articles.classify_articles.AutoTokenizer")
     @patch("classify_articles.classify_articles.hf_pipeline")
-    def test_filters_empty_text(self, mock_pipeline) -> None:
+    def test_filters_empty_text(self, mock_pipeline, mock_tokenizer) -> None:
         mock_classifier = MagicMock()
         mock_classifier.return_value = [
             [{"label": "politics", "score": 0.9}],
@@ -146,8 +151,9 @@ class TestClassifyArticles:
         result = classify_articles([], model="test-model")
         assert result == []
 
+    @patch("classify_articles.classify_articles.AutoTokenizer")
     @patch("classify_articles.classify_articles.hf_pipeline")
-    def test_all_invalid_returns_empty(self, mock_pipeline) -> None:
+    def test_all_invalid_returns_empty(self, mock_pipeline, mock_tokenizer) -> None:
         articles = [
             {"id": None, "title": "No ID"},
             {"id": "a1", "title": None, "summary": None, "text": None},
@@ -157,16 +163,20 @@ class TestClassifyArticles:
         assert result == []
         mock_pipeline.assert_not_called()
 
+    @patch("classify_articles.classify_articles.AutoTokenizer")
     @patch("classify_articles.classify_articles.hf_pipeline")
-    def test_pipeline_called_with_correct_args(self, mock_pipeline) -> None:
+    def test_pipeline_called_with_correct_args(self, mock_pipeline, mock_tokenizer) -> None:
         mock_classifier = MagicMock()
         mock_classifier.return_value = [
             [{"label": "politics", "score": 0.9}],
         ]
         mock_pipeline.return_value = mock_classifier
 
+        mock_tok_instance = MagicMock()
+        mock_tokenizer.from_pretrained.return_value = mock_tok_instance
+
         articles = [{"id": "a1", "title": "News", "text": "Body"}]
         classify_articles(articles, model="my-model", batch_size=16)
 
-        mock_pipeline.assert_called_once_with("text-classification", model="my-model", top_k=None)
-        mock_classifier.assert_called_once_with(["News Body"], batch_size=16)
+        mock_pipeline.assert_called_once_with("text-classification", model="my-model", tokenizer=mock_tok_instance, top_k=None)
+        mock_classifier.assert_called_once_with(["News Body"], batch_size=16, truncation=True)
