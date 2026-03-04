@@ -129,7 +129,7 @@ def upload_articles(articles: list[Any], session: Any) -> None:
     """
     import logging
     from sqlalchemy.dialects.postgresql import insert
-    from rds_postgres.models import Article
+    from context_db.models import Article
 
     logger = logging.getLogger(__name__)
     inserted = 0
@@ -194,7 +194,7 @@ def load_ingested_articles(
         published_at, ingested_at, text
     """
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     start, end = date_to_range(published_date)
 
@@ -254,12 +254,14 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
             "embedded_text": embedding.embedded_text,
             "embedding": embedding.embedding,
             "embedding_model": embedding.embedding_model,
+            "created_at": datetime.now(timezone.utc),
         }
         update_stmt = text(
             """
             UPDATE article_embeddings
             SET embedded_text = :embedded_text,
-                embedding = :embedding
+                embedding = :embedding,
+                created_at = :created_at
             WHERE article_id = :article_id
               AND embedding_model = :embedding_model
             """
@@ -272,9 +274,9 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
         insert_stmt = text(
             """
             INSERT INTO article_embeddings
-                (article_id, embedded_text, embedding, embedding_model)
+                (article_id, embedded_text, embedding, embedding_model, created_at)
             VALUES
-                (:article_id, :embedded_text, :embedding, :embedding_model)
+                (:article_id, :embedded_text, :embedding, :embedding_model, :created_at)
             """
         )
         session.execute(insert_stmt, params)
@@ -296,7 +298,7 @@ def load_articles_for_entities(published_date: date, overwrite: bool) -> list[di
         List of article dicts with fields: id, title, summary, text
     """
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     start, end = date_to_range(published_date)
 
@@ -315,8 +317,8 @@ def load_articles_for_entities(published_date: date, overwrite: bool) -> list[di
               AND a.text IS NOT NULL
               AND (:overwrite OR NOT EXISTS (
                     SELECT 1
-                    FROM article_entities ae
-                    WHERE ae.article_id = a.id
+                    FROM article_entity_mentions aem
+                    WHERE aem.article_id = a.id
                 ))
             """
         )
@@ -346,7 +348,7 @@ def load_articles_with_embeddings(
         published_at, ingested_at, text, embedding, embedding_model
     """
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     start, end = date_to_range(ingested_date)
 
@@ -384,16 +386,16 @@ def load_articles_with_embeddings(
 
 def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) -> None:
     """
-    Upload article entities to RDS PostgreSQL.
+    Upload article entity mentions to RDS PostgreSQL.
 
-    Handles deletion of existing entities (if overwrite), insertion of new entity
-    definitions, and insertion of article-entity relationships.
+    Handles deletion of existing mentions (if overwrite) and insertion of
+    article entity mention records into article_entity_mentions.
 
     Args:
         entities: List of entity objects with fields:
             article_id, entity_type, entity_name, count, in_title
         session: SQLAlchemy session
-        overwrite: If True, delete existing entities for these articles first
+        overwrite: If True, delete existing mentions for these articles first
     """
     from sqlalchemy import text
 
@@ -401,81 +403,48 @@ def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) 
         logger.warning("No entities to upload")
         return
 
-    # Get unique article IDs
     article_ids = sorted({entity.article_id for entity in entities})
 
-    # Delete existing entities if overwrite
     if overwrite and article_ids:
         session.execute(
-            text("DELETE FROM article_entities WHERE article_id = ANY(:article_ids)"),
+            text("DELETE FROM article_entity_mentions WHERE article_id = ANY(:article_ids)"),
             {"article_ids": article_ids},
         )
 
-    # Insert unique entity definitions
-    unique_entities = {(entity.entity_type, entity.entity_name) for entity in entities}
-    entity_rows = [
-        {"entity_type": entity_type, "entity_name": entity_name}
-        for entity_type, entity_name in unique_entities
-    ]
-    if entity_rows:
-        session.execute(
-            text(
-                """
-                INSERT INTO entities (type, name)
-                VALUES (:entity_type, :entity_name)
-                ON CONFLICT DO NOTHING
-                """
-            ),
-            entity_rows,
-        )
-
-    # Insert article-entity relationships
-    article_entity_rows = [
+    rows = [
         {
             "article_id": entity.article_id,
-            "entity_type": entity.entity_type,
-            "entity_name": entity.entity_name,
-            "entity_count": entity.count,
-            "entity_in_article_title": entity.in_title,
+            "ner_type": entity.entity_type,
+            "mention_text": entity.entity_name,
+            "mention_count": entity.count,
+            "in_title": entity.in_title,
         }
         for entity in entities
     ]
-    if article_entity_rows:
+    if rows:
         session.execute(
             text(
                 """
-                INSERT INTO article_entities (
-                    article_id,
-                    entity_type,
-                    entity_name,
-                    entity_count,
-                    entity_in_article_title
+                INSERT INTO article_entity_mentions (
+                    article_id, ner_type, mention_text, mention_count, in_title
                 )
                 VALUES (
-                    :article_id,
-                    :entity_type,
-                    :entity_name,
-                    :entity_count,
-                    :entity_in_article_title
+                    :article_id, :ner_type, :mention_text, :mention_count, :in_title
                 )
                 ON CONFLICT DO NOTHING
                 """
             ),
-            article_entity_rows,
+            rows,
         )
 
     session.commit()
-    logger.info(
-        "Upserted %d entity definitions and %d article entities into RDS",
-        len(entity_rows),
-        len(article_entity_rows),
-    )
+    logger.info("Upserted %d article entity mentions into RDS", len(rows))
 
 
 def load_clusters(cluster_period: date) -> list[dict[str, Any]]:
     """Load article clusters and their articles from RDS for a specific cluster period (UTC)."""
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     start, end = date_to_range(cluster_period)
 
@@ -551,9 +520,9 @@ def load_clusters(cluster_period: date) -> list[dict[str, Any]]:
 
 
 def load_article_locations(article_ids: list[str]) -> dict[str, list[str]]:
-    """Load locations for articles. Returns {article_id: [wikidata_qid, ...]}."""
+    """Load locations for articles. Returns {article_id: [qid, ...]}."""
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     if not article_ids:
         return {}
@@ -561,25 +530,27 @@ def load_article_locations(article_ids: list[str]) -> dict[str, list[str]]:
     with get_session() as session:
         stmt = text(
             """
-            SELECT article_id, wikidata_qid
-            FROM article_locations
-            WHERE article_id = ANY(:article_ids)
+            SELECT aer.article_id, aer.qid
+            FROM article_entities_resolved aer
+            JOIN kb_entities ke ON ke.qid = aer.qid
+            WHERE aer.article_id = ANY(:article_ids)
+              AND ke.entity_type = 'location'
             """
         )
         results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
 
     article_locations: dict[str, list[str]] = {}
     for row in results:
-        article_locations.setdefault(row["article_id"], []).append(row["wikidata_qid"])
+        article_locations.setdefault(row["article_id"], []).append(row["qid"])
 
     logger.info("Loaded locations for %d articles", len(article_locations))
     return article_locations
 
 
 def load_article_persons(article_ids: list[str]) -> dict[str, list[str]]:
-    """Load persons for articles. Returns {article_id: [wikidata_qid, ...]}."""
+    """Load persons for articles. Returns {article_id: [qid, ...]}."""
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     if not article_ids:
         return {}
@@ -587,16 +558,18 @@ def load_article_persons(article_ids: list[str]) -> dict[str, list[str]]:
     with get_session() as session:
         stmt = text(
             """
-            SELECT article_id, wikidata_qid
-            FROM article_persons
-            WHERE article_id = ANY(:article_ids)
+            SELECT aer.article_id, aer.qid
+            FROM article_entities_resolved aer
+            JOIN kb_entities ke ON ke.qid = aer.qid
+            WHERE aer.article_id = ANY(:article_ids)
+              AND ke.entity_type = 'person'
             """
         )
         results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
 
     article_persons: dict[str, list[str]] = {}
     for row in results:
-        article_persons.setdefault(row["article_id"], []).append(row["wikidata_qid"])
+        article_persons.setdefault(row["article_id"], []).append(row["qid"])
 
     logger.info("Loaded persons for %d articles", len(article_persons))
     return article_persons
@@ -627,17 +600,17 @@ def upload_stories(
 
     if overwrite:
         start, end = date_to_range(cluster_period)
-        # Delete from junction tables first (foreign key constraints)
+        # Delete story_edges first (different column names from other junction tables)
         session.execute(
             text(
                 """
-                DELETE FROM story_stories
-                WHERE story_id_1 IN (
+                DELETE FROM story_edges
+                WHERE from_story_id IN (
                     SELECT id FROM stories
                     WHERE story_period >= :start
                       AND story_period < :end
                 )
-                OR story_id_2 IN (
+                OR to_story_id IN (
                     SELECT id FROM stories
                     WHERE story_period >= :start
                       AND story_period < :end
@@ -646,7 +619,7 @@ def upload_stories(
             ),
             {"start": start, "end": end},
         )
-        for table in ("story_locations", "story_persons", "article_stories", "story_topics"):
+        for table in ("story_entities", "story_articles", "story_topics"):
             session.execute(
                 text(
                     f"""
@@ -678,11 +651,11 @@ def upload_stories(
             """
             INSERT INTO stories (
                 id, title, summary, key_points,
-                story_period, generated_at, updated_at
+                story_period, created_at, updated_at
             )
             VALUES (
                 :id, :title, :summary, :key_points,
-                :story_period, :generated_at, :updated_at
+                :story_period, :created_at, :updated_at
             )
             """
         ),
@@ -693,78 +666,58 @@ def upload_stories(
                 "summary": story["summary"],
                 "key_points": story["key_points"],
                 "story_period": story["story_period"],
-                "generated_at": now,
+                "created_at": now,
                 "updated_at": now,
             }
             for story in stories
         ],
     )
 
-    # Insert article_stories links
+    # Insert story_articles links
     article_story_rows = []
     for story in stories:
         for article_id in story["article_ids"]:
             article_story_rows.append({
                 "article_id": article_id,
                 "story_id": story["story_id"],
+                "assigned_at": now,
             })
 
     if article_story_rows:
         session.execute(
             text(
                 """
-                INSERT INTO article_stories (article_id, story_id)
-                VALUES (:article_id, :story_id)
+                INSERT INTO story_articles (article_id, story_id, assigned_at)
+                VALUES (:article_id, :story_id, :assigned_at)
                 """
             ),
             article_story_rows,
         )
 
-    # Insert story_locations
-    story_location_rows = [
-        {"story_id": story["story_id"], "wikidata_qid": story["location_qid"]}
-        for story in stories
-        if story["location_qid"]
-    ]
+    # Insert story_entities (locations and persons unified)
+    story_entity_rows = []
+    for story in stories:
+        if story["location_qid"]:
+            story_entity_rows.append({"story_id": story["story_id"], "qid": story["location_qid"]})
+        for qid in story.get("person_qids", []):
+            story_entity_rows.append({"story_id": story["story_id"], "qid": qid})
 
-    if story_location_rows:
+    if story_entity_rows:
         session.execute(
             text(
                 """
-                INSERT INTO story_locations (story_id, wikidata_qid)
-                VALUES (:story_id, :wikidata_qid)
-                """
-            ),
-            story_location_rows,
-        )
-        logger.info(
-            "Resolved locations for %d of %d stories",
-            len(story_location_rows),
-            len(stories),
-        )
-
-    # Insert story_persons
-    story_person_rows = [
-        {"story_id": story["story_id"], "wikidata_qid": qid}
-        for story in stories
-        for qid in story.get("person_qids", [])
-    ]
-
-    if story_person_rows:
-        session.execute(
-            text(
-                """
-                INSERT INTO story_persons (story_id, wikidata_qid)
-                VALUES (:story_id, :wikidata_qid)
+                INSERT INTO story_entities (story_id, qid, score, role)
+                VALUES (:story_id, :qid, NULL, NULL)
                 ON CONFLICT DO NOTHING
                 """
             ),
-            story_person_rows,
+            story_entity_rows,
         )
+        location_count = sum(1 for s in stories if s["location_qid"])
+        person_count = len(story_entity_rows) - location_count
         logger.info(
-            "Resolved persons for %d of %d stories",
-            len({r["story_id"] for r in story_person_rows}),
-            len(stories),
+            "Saved %d story entity links (%d locations, %d persons) to RDS",
+            len(story_entity_rows), location_count, person_count,
         )
 
     # Insert story_topics (if stories have been classified)
@@ -811,7 +764,7 @@ def load_entities_for_resolution(
     from collections import defaultdict
 
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     start, end = date_to_range(published_date)
 
@@ -824,23 +777,17 @@ def load_entities_for_resolution(
         stmt = text(
             """
             SELECT
-                ae.article_id,
-                ae.entity_type,
-                ae.entity_name
-            FROM article_entities ae
-            JOIN articles a ON a.id = ae.article_id
+                aem.article_id,
+                aem.ner_type,
+                aem.mention_text
+            FROM article_entity_mentions aem
+            JOIN articles a ON a.id = aem.article_id
             WHERE a.published_at >= :start
               AND a.published_at < :end
-              AND ae.entity_type IN ('GPE', 'PERSON')
-              AND (:overwrite OR (
-                NOT EXISTS (
-                    SELECT 1 FROM article_locations al
-                    WHERE al.article_id = ae.article_id
-                )
-                OR NOT EXISTS (
-                    SELECT 1 FROM article_persons ap
-                    WHERE ap.article_id = ae.article_id
-                )
+              AND aem.ner_type IN ('GPE', 'PERSON')
+              AND (:overwrite OR NOT EXISTS (
+                SELECT 1 FROM article_entities_resolved aer
+                WHERE aer.article_id = aem.article_id
               ))
             """
         )
@@ -853,10 +800,10 @@ def load_entities_for_resolution(
     person_entities: dict[str, list[str]] = defaultdict(list)
 
     for row in results:
-        if row.entity_type == "GPE":
-            gpe_entities[row.article_id].append(row.entity_name.upper())
-        elif row.entity_type == "PERSON":
-            person_entities[row.article_id].append(row.entity_name.upper())
+        if row.ner_type == "GPE":
+            gpe_entities[row.article_id].append(row.mention_text.upper())
+        elif row.ner_type == "PERSON":
+            person_entities[row.article_id].append(row.mention_text.upper())
 
     logger.info(
         "Loaded %d GPE entities from %d articles and %d PERSON entities from %d articles",
@@ -877,7 +824,7 @@ def load_location_aliases() -> dict[str, list]:
     from collections import defaultdict
 
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
     from resolve_entities.models import LocationCandidate
 
     logger.info("Loading location aliases from RDS")
@@ -885,13 +832,15 @@ def load_location_aliases() -> dict[str, list]:
         stmt = text(
             """
             SELECT
-                UPPER(la.alias) as alias,
-                la.wikidata_qid,
-                l.name,
-                l.location_type,
-                l.country_code
-            FROM location_aliases la
-            JOIN locations l ON l.wikidata_qid = la.wikidata_qid
+                UPPER(kea.alias) as alias,
+                kea.qid,
+                ke.name,
+                kl.location_type,
+                kl.country_code
+            FROM kb_entity_aliases kea
+            JOIN kb_entities ke ON ke.qid = kea.qid
+            JOIN kb_locations kl ON kl.qid = kea.qid
+            WHERE ke.entity_type = 'location'
             """
         )
         results = session.execute(stmt).all()
@@ -900,7 +849,7 @@ def load_location_aliases() -> dict[str, list]:
     for row in results:
         alias_to_locations[row.alias].append(
             LocationCandidate(
-                wikidata_qid=row.wikidata_qid,
+                wikidata_qid=row.qid,
                 name=row.name,
                 location_type=row.location_type,
                 country_code=row.country_code,
@@ -920,7 +869,7 @@ def load_person_aliases() -> dict[str, list]:
     from collections import defaultdict
 
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
     from resolve_entities.models import PersonCandidate
 
     logger.info("Loading person aliases from RDS")
@@ -928,13 +877,15 @@ def load_person_aliases() -> dict[str, list]:
         stmt = text(
             """
             SELECT
-                UPPER(pa.alias) as alias,
-                pa.wikidata_qid,
-                p.name,
-                p.description,
-                p.nationalities
-            FROM person_aliases pa
-            JOIN persons p ON p.wikidata_qid = pa.wikidata_qid
+                UPPER(kea.alias) as alias,
+                kea.qid,
+                ke.name,
+                ke.description,
+                kp.nationalities
+            FROM kb_entity_aliases kea
+            JOIN kb_entities ke ON ke.qid = kea.qid
+            JOIN kb_persons kp ON kp.qid = kea.qid
+            WHERE ke.entity_type = 'person'
             """
         )
         results = session.execute(stmt).all()
@@ -943,7 +894,7 @@ def load_person_aliases() -> dict[str, list]:
     for row in results:
         alias_to_persons[row.alias].append(
             PersonCandidate(
-                wikidata_qid=row.wikidata_qid,
+                wikidata_qid=row.qid,
                 name=row.name,
                 description=row.description,
                 nationalities=row.nationalities,
@@ -976,26 +927,32 @@ def upload_resolved_locations(
 
     if overwrite:
         session.execute(
-            text("DELETE FROM article_locations WHERE article_id = ANY(:article_ids)"),
+            text(
+                """
+                DELETE FROM article_entities_resolved
+                WHERE article_id = ANY(:article_ids)
+                  AND qid IN (SELECT qid FROM kb_entities WHERE entity_type = 'location')
+                """
+            ),
             {"article_ids": article_ids},
         )
 
     records = [
-        {"article_id": loc.article_id, "wikidata_qid": loc.wikidata_qid, "name": loc.name}
+        {"article_id": loc.article_id, "qid": loc.wikidata_qid}
         for loc in locations
     ]
     session.execute(
         text(
             """
-            INSERT INTO article_locations (article_id, wikidata_qid, name)
-            VALUES (:article_id, :wikidata_qid, :name)
+            INSERT INTO article_entities_resolved (article_id, qid, score)
+            VALUES (:article_id, :qid, NULL)
             ON CONFLICT DO NOTHING
             """
         ),
         records,
     )
     session.commit()
-    logger.info("Upserted %d article locations into RDS", len(records))
+    logger.info("Upserted %d article location entities into RDS", len(records))
 
 
 def upload_resolved_persons(
@@ -1020,26 +977,32 @@ def upload_resolved_persons(
 
     if overwrite:
         session.execute(
-            text("DELETE FROM article_persons WHERE article_id = ANY(:article_ids)"),
+            text(
+                """
+                DELETE FROM article_entities_resolved
+                WHERE article_id = ANY(:article_ids)
+                  AND qid IN (SELECT qid FROM kb_entities WHERE entity_type = 'person')
+                """
+            ),
             {"article_ids": article_ids},
         )
 
     records = [
-        {"article_id": p.article_id, "wikidata_qid": p.wikidata_qid, "name": p.name}
+        {"article_id": p.article_id, "qid": p.wikidata_qid}
         for p in persons
     ]
     session.execute(
         text(
             """
-            INSERT INTO article_persons (article_id, wikidata_qid, name)
-            VALUES (:article_id, :wikidata_qid, :name)
+            INSERT INTO article_entities_resolved (article_id, qid, score)
+            VALUES (:article_id, :qid, NULL)
             ON CONFLICT DO NOTHING
             """
         ),
         records,
     )
     session.commit()
-    logger.info("Upserted %d article persons into RDS", len(records))
+    logger.info("Upserted %d article person entities into RDS", len(records))
 
 
 def load_articles_for_classification(
@@ -1057,7 +1020,7 @@ def load_articles_for_classification(
         List of article dicts with fields: id, title, summary, text
     """
     from sqlalchemy import text
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     start, end = date_to_range(published_date)
 

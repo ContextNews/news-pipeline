@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from dotenv import load_dotenv
-from rds_postgres.connection import get_session
+from context_db.connection import get_session
 
 from extract_entities.extract_entities import extract_entities
 from extract_entities.helpers import parse_extract_entities_args
@@ -39,10 +39,10 @@ def main() -> None:
         return
 
     if args.load_s3:
-        upload_jsonl_records_to_s3(entities, "article_entities")
+        upload_jsonl_records_to_s3(entities, "article_entity_mentions")
 
     if args.load_local:
-        save_jsonl_records_local(entities, "article_entities")
+        save_jsonl_records_local(entities, "article_entity_mentions")
 
     if args.load_rds:
         with get_session() as session:

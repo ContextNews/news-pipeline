@@ -113,8 +113,8 @@ def _load_stories_for_llm(story_ids: list[str]) -> list[dict[str, Any]]:
 
     Returns list of dicts in stable order matching story_ids.
     """
-    from rds_postgres.connection import get_session
-    from rds_postgres.models import Story
+    from context_db.connection import get_session
+    from context_db.models import Story
 
     with get_session() as session:
         stories_by_id = {}
@@ -134,31 +134,33 @@ def _load_stories_for_llm(story_ids: list[str]) -> list[dict[str, Any]]:
 def save_story_links(
     links: list[tuple[str, str]], session: Any
 ) -> None:
-    """Insert story-story relationship rows into story_stories table.
+    """Insert directed story relationship rows into story_edges table.
 
     Args:
         links: List of (story_id_1, story_id_2) tuples where story_id_1 is
-            the older story and story_id_2 is the newer story.
+            the older story (from_story_id) and story_id_2 is the newer story (to_story_id).
         session: SQLAlchemy session.
     """
     if not links:
         return
 
+    from datetime import datetime, timezone
     from sqlalchemy import text
 
+    now = datetime.now(timezone.utc)
     rows = [
-        {"story_id_1": sid1, "story_id_2": sid2}
+        {"from_story_id": sid1, "to_story_id": sid2, "created_at": now}
         for sid1, sid2 in links
     ]
 
     session.execute(
         text(
             """
-            INSERT INTO story_stories (story_id_1, story_id_2)
-            VALUES (:story_id_1, :story_id_2)
+            INSERT INTO story_edges (from_story_id, to_story_id, relation_type, score, created_at)
+            VALUES (:from_story_id, :to_story_id, 'followup', NULL, :created_at)
             ON CONFLICT DO NOTHING
             """
         ),
         rows,
     )
-    logger.info("Saved %d story links to RDS", len(rows))
+    logger.info("Saved %d story edges to RDS", len(rows))

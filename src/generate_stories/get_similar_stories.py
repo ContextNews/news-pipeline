@@ -17,7 +17,7 @@ def get_similar_stories(
     Each result dict contains story_id, title, summary, similarity_score,
     and breakdown scores (embedding_similarity, topic_similarity, entity_similarity).
     """
-    from rds_postgres.connection import get_session
+    from context_db.connection import get_session
 
     with get_session() as session:
         # Load input story metadata
@@ -102,7 +102,7 @@ def get_similar_stories(
 def _load_stories_with_metadata(session, target_date, exclude_story_id):
     """Load stories on target_date with their topics, locations, and persons."""
     from sqlalchemy import cast, Date
-    from rds_postgres.models import Story, StoryLocation, StoryPerson, StoryTopic
+    from context_db.models import Story, StoryEntity, StoryTopic, KBEntity
 
     query = session.query(Story).filter(
         cast(Story.story_period, Date) == target_date
@@ -121,13 +121,17 @@ def _load_stories_with_metadata(session, target_date, exclude_story_id):
         .all()
     )
     locations_by_story = _group_by_story(
-        session.query(StoryLocation.story_id, StoryLocation.wikidata_qid)
-        .filter(StoryLocation.story_id.in_(story_ids))
+        session.query(StoryEntity.story_id, StoryEntity.qid)
+        .join(KBEntity, KBEntity.qid == StoryEntity.qid)
+        .filter(StoryEntity.story_id.in_(story_ids))
+        .filter(KBEntity.entity_type == "location")
         .all()
     )
     persons_by_story = _group_by_story(
-        session.query(StoryPerson.story_id, StoryPerson.wikidata_qid)
-        .filter(StoryPerson.story_id.in_(story_ids))
+        session.query(StoryEntity.story_id, StoryEntity.qid)
+        .join(KBEntity, KBEntity.qid == StoryEntity.qid)
+        .filter(StoryEntity.story_id.in_(story_ids))
+        .filter(KBEntity.entity_type == "person")
         .all()
     )
 
@@ -146,7 +150,7 @@ def _load_stories_with_metadata(session, target_date, exclude_story_id):
 
 def _load_single_story_metadata(session, story_id):
     """Load a single story's metadata by its ID."""
-    from rds_postgres.models import Story, StoryLocation, StoryPerson, StoryTopic
+    from context_db.models import Story, StoryEntity, StoryTopic, KBEntity
 
     story = session.query(Story).filter(Story.id == story_id).first()
     if story is None:
@@ -159,15 +163,19 @@ def _load_single_story_metadata(session, story_id):
         .all()
     }
     location_qids = {
-        row.wikidata_qid
-        for row in session.query(StoryLocation.wikidata_qid)
-        .filter(StoryLocation.story_id == story_id)
+        row.qid
+        for row in session.query(StoryEntity.qid)
+        .join(KBEntity, KBEntity.qid == StoryEntity.qid)
+        .filter(StoryEntity.story_id == story_id)
+        .filter(KBEntity.entity_type == "location")
         .all()
     }
     person_qids = {
-        row.wikidata_qid
-        for row in session.query(StoryPerson.wikidata_qid)
-        .filter(StoryPerson.story_id == story_id)
+        row.qid
+        for row in session.query(StoryEntity.qid)
+        .join(KBEntity, KBEntity.qid == StoryEntity.qid)
+        .filter(StoryEntity.story_id == story_id)
+        .filter(KBEntity.entity_type == "person")
         .all()
     }
 
@@ -186,7 +194,7 @@ def _load_story_embeddings(session, story_ids, embedding_model):
 
     Returns {story_id: [embedding_vector, ...]}.
     """
-    from rds_postgres.models import ArticleEmbedding, ArticleStory
+    from context_db.models import ArticleEmbedding, ArticleStory
 
     rows = (
         session.query(ArticleStory.story_id, ArticleEmbedding.embedding)

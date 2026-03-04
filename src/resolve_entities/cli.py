@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from dotenv import load_dotenv
-from rds_postgres.connection import get_session
+from context_db.connection import get_session
 
 from resolve_entities.resolve_entities import resolve_entities
 from resolve_entities.helpers import parse_resolve_entities_args

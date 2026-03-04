@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from dotenv import load_dotenv
-from rds_postgres.connection import get_session
+from context_db.connection import get_session
 
 from common.cli_helpers import setup_logging
 from link_stories.helpers import parse_link_stories_args

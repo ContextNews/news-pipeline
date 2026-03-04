@@ -395,10 +395,8 @@ python-dotenv = "^1.0.1"
 sqlalchemy = "^2.0.29"
 
 [package.source]
-type = "git"
-url = "https://github.com/ContextNews/context-data-schemas.git"
-reference = "main"
-resolved_reference = "aa1d8bdc764daaca6991133fc072c1db2341449b"
+type = "directory"
+url = "../context-data-schema"
 
 [[package]]
 name = "courlan"
@@ -4073,4 +4071,4 @@ dev = ["pytest", "setuptools"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "c6812fe7afccbd3586bd27dc32f9ef8b2b68ac19891034b7ca345184484b90ef"
+content-hash = "dbb1f0aa93b632e2f809b52a69f13e3d568ea5dd44cd0697e547341dd54010f6"

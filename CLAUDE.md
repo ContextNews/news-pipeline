@@ -20,6 +20,7 @@ poetry run python -m extract_entities --load-s3 --load-rds --published-date 2024
 poetry run python -m resolve_entities --load-s3 --load-rds --published-date 2024-01-01
 poetry run python -m cluster_articles --load-s3 --load-rds --ingested-date 2024-01-01
 poetry run python -m generate_stories --load-s3 --load-rds --cluster-period 2024-01-01
+poetry run python -m classify_articles --load-s3 --load-rds --published-date 2024-01-01
 poetry run python -m link_stories --date-a 2024-01-01 --date-b 2024-01-02 --load-rds
 ```
 
@@ -35,9 +36,9 @@ This is a modular news processing pipeline with seven stages:
 6. **generate_stories** - Uses OpenAI (via Cronkite library) to generate story summaries from clusters and classify them by topic
 7. **link_stories** - Standalone stage to link stories between any two dates using embedding similarity + LLM confirmation
 
-**classify_articles** is a library module (no CLI) used by other stages to classify articles by topic using a HuggingFace text-classification model (default: `ContextNews/news-classifier`). Returns `ClassifiedArticle` objects with topic labels and sigmoid scores.
+**classify_articles** - Classifies articles by topic using a HuggingFace text-classification model (default: `ContextNews/news-classifier`). Returns `ClassifiedArticle` objects with topic labels and sigmoid scores.
 
-Orchestration order: `ingest → (embed + extract_entities in parallel) → resolve_entities → cluster → generate_stories`. The `link_stories` stage runs independently.
+Orchestration order: `ingest → (embed + extract_entities + classify in parallel) → resolve_entities → cluster → generate_stories`. The `link_stories` stage runs independently.
 
 ### Module Structure
 
@@ -99,7 +100,7 @@ Tests live in `tests/unit/` mirroring the stage structure (e.g., `tests/unit/ing
 
 ### GitHub Actions
 
-The pipeline runs via GitHub Actions (`.github/workflows/`). The `run_pipeline.yaml` workflow orchestrates all stages and runs on a schedule (06:00 and 18:00 UTC). Individual stage workflows can be triggered manually. RDS access uses an SSH tunnel through a bastion host.
+The pipeline runs via GitHub Actions (`.github/workflows/`). The `run_pipeline.yaml` workflow orchestrates all stages (scheduled cron is currently paused; trigger manually). Individual stage workflows can also be triggered manually. RDS access uses an SSH tunnel through a bastion host.
 
 #### Config Profiles
 

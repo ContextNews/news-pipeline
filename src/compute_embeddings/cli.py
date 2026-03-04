@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from dotenv import load_dotenv
-from rds_postgres.connection import get_session
+from context_db.connection import get_session
 
 from compute_embeddings.compute_embeddings import compute_embeddings
 from compute_embeddings.helpers import parse_compute_embeddings_args

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from dotenv import load_dotenv
-from rds_postgres.connection import get_session
+from context_db.connection import get_session
 
 from classify_articles.classify_articles import classify_articles
 from classify_articles.helpers import parse_classify_articles_args

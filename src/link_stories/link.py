@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from cronkite import Cronkite
@@ -90,8 +90,8 @@ def link_stories(
 def load_stories_for_date(target_date: date) -> list[dict[str, Any]]:
     """Load stories for a date as dicts suitable for linking."""
     from sqlalchemy import Date, cast
-    from rds_postgres.connection import get_session
-    from rds_postgres.models import Story
+    from context_db.connection import get_session
+    from context_db.models import Story
 
     with get_session() as session:
         rows = (
@@ -113,8 +113,8 @@ def load_stories_for_date(target_date: date) -> list[dict[str, Any]]:
 
 def _load_stories_for_llm(story_ids: list[str]) -> list[dict[str, Any]]:
     """Load title, summary, key_points from stories table for the given IDs."""
-    from rds_postgres.connection import get_session
-    from rds_postgres.models import Story
+    from context_db.connection import get_session
+    from context_db.models import Story
 
     with get_session() as session:
         stories_by_id = {}
@@ -134,41 +134,46 @@ def _load_stories_for_llm(story_ids: list[str]) -> list[dict[str, Any]]:
 def save_story_links(
     links: list[tuple[str, str]], session: Any
 ) -> None:
-    """Insert story-story relationship rows into story_stories table."""
+    """Insert directed story relationship rows into story_edges table.
+
+    story_id_1 is the older story (from_story_id), story_id_2 is the newer story (to_story_id).
+    """
     if not links:
         return
 
+    from datetime import timezone
     from sqlalchemy import text
 
+    now = datetime.now(timezone.utc)
     rows = [
-        {"story_id_1": story_id_1, "story_id_2": story_id_2}
+        {"from_story_id": story_id_1, "to_story_id": story_id_2, "created_at": now}
         for story_id_1, story_id_2 in links
     ]
 
     session.execute(
         text(
             """
-            INSERT INTO story_stories (story_id_1, story_id_2)
-            VALUES (:story_id_1, :story_id_2)
+            INSERT INTO story_edges (from_story_id, to_story_id, relation_type, score, created_at)
+            VALUES (:from_story_id, :to_story_id, 'followup', NULL, :created_at)
             ON CONFLICT DO NOTHING
             """
         ),
         rows,
     )
-    logger.info("Saved %d story links to RDS", len(rows))
+    logger.info("Saved %d story edges to RDS", len(rows))
 
 
 def delete_story_links(date_a: date, date_b: date, session: Any) -> int:
-    """Delete existing links between stories from two specific dates."""
+    """Delete existing edges between stories from two specific dates."""
     from sqlalchemy import text
 
     result = session.execute(
         text(
             """
-            DELETE FROM story_stories ss
+            DELETE FROM story_edges se
             USING stories s1, stories s2
-            WHERE s1.id = ss.story_id_1
-              AND s2.id = ss.story_id_2
+            WHERE s1.id = se.from_story_id
+              AND s2.id = se.to_story_id
               AND (
                 (CAST(s1.story_period AS DATE) = :date_a AND CAST(s2.story_period AS DATE) = :date_b)
                 OR
@@ -179,5 +184,5 @@ def delete_story_links(date_a: date, date_b: date, session: Any) -> int:
         {"date_a": date_a, "date_b": date_b},
     )
     deleted = result.rowcount or 0
-    logger.info("Deleted %d existing story links between %s and %s", deleted, date_a, date_b)
+    logger.info("Deleted %d existing story edges between %s and %s", deleted, date_a, date_b)
     return deleted

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from dotenv import load_dotenv
-from rds_postgres.connection import get_session
+from context_db.connection import get_session
 
 from ingest_articles.ingest_articles import ingest_articles
 from ingest_articles.helpers import parse_sources, parse_ingest_articles_args

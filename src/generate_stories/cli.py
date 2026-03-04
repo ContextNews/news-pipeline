@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from rds_postgres.connection import get_session
+from context_db.connection import get_session
 
 from generate_stories.generate_stories import generate_story
 from generate_stories.helpers import parse_generate_stories_args, build_story_record
