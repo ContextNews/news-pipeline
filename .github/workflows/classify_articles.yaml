@@ -75,7 +75,7 @@ on:
 
 jobs:
   classify-articles:
-    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner == 'aws' && 'self-hosted' || 'ubuntu-latest' }}
     permissions:
       id-token: write
       contents: read

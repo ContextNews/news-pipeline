@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   load-config:
-    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner == 'aws' && 'self-hosted' || 'ubuntu-latest' }}
     outputs:
       # ingest
       ingest-lookback-hours: ${{ steps.parse.outputs.ingest-lookback-hours }}

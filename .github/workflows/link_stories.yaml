@@ -33,7 +33,7 @@ on:
 
 jobs:
   link-stories:
-    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner == 'aws' && 'self-hosted' || 'ubuntu-latest' }}
     permissions:
       contents: read
 
