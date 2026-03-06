@@ -47,6 +47,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Poetry
+        if: inputs.runner != 'aws'
         uses: snok/install-poetry@v1
         with:
           version: latest
