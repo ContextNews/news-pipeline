@@ -105,6 +105,7 @@ jobs:
           aws-region: eu-west-2
 
       - name: Set up Python
+        if: inputs.runner != 'aws'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
