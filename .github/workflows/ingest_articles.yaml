@@ -3,6 +3,9 @@ name: Ingest Articles
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: 'github'
       lookback-hours:
         type: number
         default: 12
@@ -17,6 +20,13 @@ on:
         default: true
   workflow_dispatch:
     inputs:
+      runner:
+        description: 'Runner to use'
+        type: choice
+        options:
+          - github
+          - aws
+        default: 'github'
       lookback-hours:
         description: 'Fetch articles lookback (Hours)'
         type: number
@@ -36,7 +46,7 @@ on:
 
 jobs:
   ingest-articles:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
     permissions:
       id-token: write
       contents: read

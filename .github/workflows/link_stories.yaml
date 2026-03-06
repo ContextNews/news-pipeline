@@ -3,6 +3,13 @@ name: Link Stories
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: 'Runner to use'
+        type: choice
+        options:
+          - github
+          - aws
+        default: 'github'
       date-a:
         description: 'Older UTC date for candidate stories (YYYY-MM-DD)'
         type: string
@@ -26,7 +33,7 @@ on:
 
 jobs:
   link-stories:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
     permissions:
       contents: read
 

@@ -1,14 +1,21 @@
 name: Run Pipeline
 
 on:
-  # schedule:
-  #   - cron: "0 6,18 * * *"
+  schedule:
+    - cron: "0 9,12,15 * * *"
   workflow_dispatch:
     inputs:
       config:
         description: 'Config profile name (filename without .yaml in config/)'
         type: string
         default: 'default'
+      runner:
+        description: 'Runner to use'
+        type: choice
+        options:
+          - github
+          - aws
+        default: 'github'
 
 permissions:
   id-token: write
@@ -16,7 +23,7 @@ permissions:
 
 jobs:
   load-config:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
     outputs:
       # ingest
       ingest-lookback-hours: ${{ steps.parse.outputs.ingest-lookback-hours }}
@@ -154,6 +161,7 @@ jobs:
     uses: ./.github/workflows/ingest_articles.yaml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       lookback-hours: ${{ fromJSON(needs.load-config.outputs.ingest-lookback-hours) }}
       sources: ${{ needs.load-config.outputs.ingest-sources }}
       load-s3: ${{ fromJSON(needs.load-config.outputs.ingest-load-s3) }}
@@ -165,6 +173,7 @@ jobs:
     uses: ./.github/workflows/compute_embeddings.yaml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       published-date: ${{ needs.load-config.outputs.embed-date }}
       model: ${{ needs.load-config.outputs.embed-model }}
       batch-size: ${{ fromJSON(needs.load-config.outputs.embed-batch-size) }}
@@ -181,6 +190,7 @@ jobs:
     uses: ./.github/workflows/extract_entities.yaml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       published-date: ${{ needs.load-config.outputs.entities-date }}
       model: ${{ needs.load-config.outputs.entities-model }}
       batch-size: ${{ fromJSON(needs.load-config.outputs.entities-batch-size) }}
@@ -194,6 +204,7 @@ jobs:
     uses: ./.github/workflows/classify_articles.yaml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       published-date: ${{ needs.load-config.outputs.classify-date }}
       model: ${{ needs.load-config.outputs.classify-model }}
       batch-size: ${{ fromJSON(needs.load-config.outputs.classify-batch-size) }}
@@ -209,6 +220,7 @@ jobs:
     uses: ./.github/workflows/resolve_entities.yaml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       published-date: ${{ needs.load-config.outputs.resolve-date }}
       overwrite: ${{ fromJSON(needs.load-config.outputs.resolve-overwrite) }}
       load-s3: ${{ fromJSON(needs.load-config.outputs.resolve-load-s3) }}
@@ -220,6 +232,7 @@ jobs:
     uses: ./.github/workflows/cluster_articles.yaml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       ingested-date: ${{ needs.load-config.outputs.cluster-date }}
       embedding-model: ${{ needs.load-config.outputs.cluster-embedding-model }}
       min-cluster-size: ${{ fromJSON(needs.load-config.outputs.cluster-min-cluster-size) }}
@@ -234,6 +247,7 @@ jobs:
     uses: ./.github/workflows/generate_stories.yaml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       cluster-period: ${{ needs.load-config.outputs.stories-date }}
       model: ${{ needs.load-config.outputs.stories-model }}
       classify: ${{ fromJSON(needs.load-config.outputs.stories-classify) }}

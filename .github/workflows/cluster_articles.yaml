@@ -3,6 +3,9 @@ name: Cluster Articles
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: 'github'
       ingested-date:
         type: string
         default: ''
@@ -26,6 +29,13 @@ on:
         default: true
   workflow_dispatch:
     inputs:
+      runner:
+        description: 'Runner to use'
+        type: choice
+        options:
+          - github
+          - aws
+        default: 'github'
       ingested-date:
         description: 'UTC date to load from RDS (YYYY-MM-DD)'
         type: string
@@ -58,7 +68,7 @@ on:
 
 jobs:
   cluster-articles:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
     permissions:
       id-token: write
       contents: read

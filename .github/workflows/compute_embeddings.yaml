@@ -3,6 +3,9 @@ name: Compute Embeddings
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: 'github'
       published-date:
         type: string
         default: ''
@@ -35,6 +38,13 @@ on:
         default: true
   workflow_dispatch:
     inputs:
+      runner:
+        description: 'Runner to use'
+        type: choice
+        options:
+          - github
+          - aws
+        default: 'github'
       published-date:
         description: 'Embed articles published on this date (YYYY-MM-DD)'
         type: string
@@ -79,7 +89,7 @@ on:
 
 jobs:
   compute-embeddings:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner == 'aws' && 'context-dev-runner' || 'ubuntu-latest' }}
     permissions:
       id-token: write
       contents: read
