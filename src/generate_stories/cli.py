@@ -11,7 +11,7 @@ from context_db.connection import get_session
 
 from generate_stories.generate_stories import generate_story
 from generate_stories.helpers import parse_generate_stories_args, build_story_record
-from common.aws import load_clusters, load_article_locations, load_article_persons, upload_stories, upload_jsonl_to_s3, build_s3_key
+from common.aws import load_clusters, load_article_locations, load_article_persons, load_article_topics, upload_stories, upload_jsonl_to_s3, build_s3_key
 from common.cli_helpers import setup_logging, save_jsonl_local
 
 load_dotenv()
@@ -92,18 +92,12 @@ def main() -> None:
     if args.classify:
         from generate_stories.classify_stories import classify_stories
 
-        cronkite_stories = [
-            {"id": s["story_id"], "title": s["title"], "summary": s["summary"]}
-            for s in stories
-        ]
-        try:
-            classified = classify_stories(cronkite_stories, model=args.model)
-            topics_by_id = {cs.story_id: cs.topics for cs in classified}
-            for story in stories:
-                story["topics"] = topics_by_id.get(story["story_id"], [])
-            logger.info("Classified %d of %d stories", len(classified), len(stories))
-        except Exception as e:
-            logger.error("Failed to classify stories: %s", e)
+        article_topics = load_article_topics(all_article_ids)
+        classified = classify_stories(stories, article_topics)
+        topics_by_id = {cs.story_id: cs.topics for cs in classified}
+        for story in stories:
+            story["topics"] = topics_by_id.get(story["story_id"], [])
+        logger.info("Classified %d of %d stories", len(classified), len(stories))
 
     if args.load_s3:
         bucket_key = build_s3_key(

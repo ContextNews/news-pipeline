@@ -11,8 +11,9 @@ The repository contains standalone stages under `src/`:
 3. `extract_entities` - run spaCy NER over article text.
 4. `resolve_entities` - resolve GPE/PERSON entities to Wikidata-linked locations/persons.
 5. `cluster_articles` - cluster related articles with HDBSCAN.
-6. `generate_stories` - generate story overviews from clusters; optional topic classification and previous-day linking.
-7. `link_stories` - standalone stage to link stories between any two dates.
+6. `classify_articles` - classify articles by topic using a HuggingFace text-classification model.
+7. `generate_stories` - generate story overviews from clusters; optional topic classification and previous-day linking.
+8. `link_stories` - standalone stage to link stories between any two dates.
 
 Shared helpers live in `src/common`.
 
@@ -22,7 +23,7 @@ Shared helpers live in `src/common`.
 
 `Run Pipeline` (`.github/workflows/run_pipeline.yaml`) orchestrates:
 
-`ingest -> (embed + extract-entities) -> resolve-entities -> cluster -> generate-stories`
+`ingest -> (embed + extract-entities + classify) -> resolve-entities -> cluster -> generate-stories`
 
 It runs on schedule at `06:00` and `18:00` UTC, and supports manual runs with a single input:
 
@@ -41,10 +42,12 @@ flowchart TD
     B --> C["ingest"]
     C --> D["embed"]
     C --> E["extract-entities"]
+    C --> I["classify"]
     E --> F["resolve-entities"]
     D --> G["cluster"]
     F --> H["generate-stories"]
     G --> H
+    I --> H
 ```
 
 ### Standalone linking workflow
@@ -72,7 +75,7 @@ Inputs:
 ### Install dependencies
 
 ```bash
-poetry install --with dev,ingest_articles,compute_embeddings,extract_entities,cluster_articles,generate_stories,link_stories
+poetry install --with dev,ingest_articles,compute_embeddings,extract_entities,cluster_articles,classify_articles,generate_stories,link_stories
 ```
 
 If you only need a subset of stages, install only the relevant dependency groups.
@@ -113,6 +116,7 @@ Primary RDS targets written by each stage:
 - `extract_entities`: `entities`, `article_entities`
 - `resolve_entities`: `article_locations`, `article_persons`
 - `cluster_articles`: `article_clusters`, `article_cluster_articles`
+- `classify_articles`: `article_topics`
 - `generate_stories`: `stories`, `article_stories`, plus story metadata/link tables (for example `story_locations`, `story_persons`, `story_topics`, `story_stories`)
 - `link_stories`: `story_stories`
 
@@ -131,7 +135,7 @@ S3 outputs use partitioned keys built as:
 - `.github/workflows/link_stories.yaml`
 - `.github/workflows/run_pipeline.yaml`
 
-Each stage workflow sets up AWS credentials, an SSH tunnel to RDS, and runs the corresponding CLI command with built arguments.
+Each stage workflow sets up AWS credentials, a database connection, and runs the corresponding CLI command with built arguments.
 
 ## Tests
 

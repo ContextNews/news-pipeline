@@ -19,24 +19,23 @@ poetry run python -m compute_embeddings --load-s3 --load-rds --published-date 20
 poetry run python -m extract_entities --load-s3 --load-rds --published-date 2024-01-01
 poetry run python -m resolve_entities --load-s3 --load-rds --published-date 2024-01-01
 poetry run python -m cluster_articles --load-s3 --load-rds --ingested-date 2024-01-01
-poetry run python -m generate_stories --load-s3 --load-rds --cluster-period 2024-01-01
 poetry run python -m classify_articles --load-s3 --load-rds --published-date 2024-01-01
+poetry run python -m generate_stories --load-s3 --load-rds --cluster-period 2024-01-01
 poetry run python -m link_stories --date-a 2024-01-01 --date-b 2024-01-02 --load-rds
 ```
 
 ## Architecture
 
-This is a modular news processing pipeline with seven stages:
+This is a modular news processing pipeline with eight stages:
 
 1. **ingest_articles** - Fetches articles from RSS feeds, extracts full text via trafilatura/readability
 2. **compute_embeddings** - Generates sentence-transformer embeddings (default: all-MiniLM-L6-v2)
 3. **extract_entities** - Extracts named entities using spaCy NER
 4. **resolve_entities** - Resolves GPE entities to locations and PERSON entities to persons using disambiguation heuristics
 5. **cluster_articles** - Groups related articles using HDBSCAN clustering on embeddings
-6. **generate_stories** - Uses OpenAI (via Cronkite library) to generate story summaries from clusters and classify them by topic
-7. **link_stories** - Standalone stage to link stories between any two dates using embedding similarity + LLM confirmation
-
-**classify_articles** - Classifies articles by topic using a HuggingFace text-classification model (default: `ContextNews/news-classifier`). Returns `ClassifiedArticle` objects with topic labels and sigmoid scores.
+6. **classify_articles** - Classifies articles by topic using a HuggingFace text-classification model (default: `ContextNews/news-classifier`). Returns `ClassifiedArticle` objects with topic labels and sigmoid scores.
+7. **generate_stories** - Uses OpenAI (via Cronkite library) to generate story summaries from clusters and classify them by topic
+8. **link_stories** - Standalone stage to link stories between any two dates using embedding similarity + LLM confirmation
 
 Orchestration order: `ingest → (embed + extract_entities + classify in parallel) → resolve_entities → cluster → generate_stories`. The `link_stories` stage runs independently.
 
@@ -48,6 +47,8 @@ Each stage is a standalone module under `src/` following the same pattern:
 - `{stage_name}.py` — core logic (pure functions, no I/O)
 - `models.py` — dataclasses for stage inputs/outputs
 - `helpers.py` — argument parsing and stage-specific utilities
+
+Some stages have sub-modules: `ingest_articles` contains `fetch_articles/` and `clean_articles/` sub-packages. `generate_stories` contains additional modules: `classify_stories.py`, `resolve_story_entities.py`, `link_stories.py` (internal linking logic, distinct from the top-level `link_stories` stage), `get_similar_stories.py`, and `instructions.py` (LLM prompt templates).
 
 ### Import Convention
 
@@ -61,7 +62,7 @@ from common.cli_helpers import parse_date, date_to_range, setup_logging
 
 ### Key Dependencies
 
-- **context-data-schema** (external package): Provides SQLAlchemy models and database connection via `rds_postgres.connection.get_session()` and `rds_postgres.models`
+- **context-data-schema** (external package): Provides SQLAlchemy models and database connection via `context_db.connection.get_session()` and `context_db.models`
 - **Cronkite** (external package): Story generation library wrapping OpenAI. Constructor: `Cronkite(model, config)`
 
 ### Data Flow
@@ -74,15 +75,16 @@ from common.cli_helpers import parse_date, date_to_range, setup_logging
 ### Common Utilities (`src/common/`)
 
 - `aws.py`: S3 upload/download, `build_s3_key()` for partitioned paths, all RDS load/upload functions
-- `cli_helpers.py`: `parse_date()`, `date_to_range()`, `setup_logging()`
-- `serialization.py`: `serialize_dataclass()` for JSONL output
+- `cli_helpers.py`: `parse_date()`, `date_to_range()`, `setup_logging()`, `save_jsonl_local()`
+- `serialization.py`: `serialize_dataclass()` for JSONL output (ISO-formats datetimes)
 - `hashing.py`: URL hashing for article IDs
+- `datetime.py`, `utils.py`, `local_io.py`: Additional date, general, and local file I/O utilities
 
 ### Database Access Pattern
 
 ```python
-from rds_postgres.connection import get_session
-from rds_postgres.models import Article
+from context_db.connection import get_session
+from context_db.models import Article
 
 with get_session() as session:
     articles = session.query(Article).filter(...).all()
@@ -100,7 +102,7 @@ Tests live in `tests/unit/` mirroring the stage structure (e.g., `tests/unit/ing
 
 ### GitHub Actions
 
-The pipeline runs via GitHub Actions (`.github/workflows/`). The `run_pipeline.yaml` workflow orchestrates all stages (scheduled cron is currently paused; trigger manually). Individual stage workflows can also be triggered manually. RDS access uses an SSH tunnel through a bastion host.
+The pipeline runs via GitHub Actions (`.github/workflows/`). The `run_pipeline.yaml` workflow orchestrates all stages on a schedule (3x daily: 9am, 12pm, 3pm UTC) and can also be triggered manually. Individual stage workflows can also be triggered manually. RDS access uses an SSH tunnel through a bastion host.
 
 #### Config Profiles
 

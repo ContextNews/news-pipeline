@@ -575,6 +575,32 @@ def load_article_persons(article_ids: list[str]) -> dict[str, list[str]]:
     return article_persons
 
 
+def load_article_topics(article_ids: list[str]) -> dict[str, list[str]]:
+    """Load topics for articles. Returns {article_id: [topic, ...]}."""
+    from sqlalchemy import text
+    from context_db.connection import get_session
+
+    if not article_ids:
+        return {}
+
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT article_id, topic
+            FROM article_topics
+            WHERE article_id = ANY(:article_ids)
+            """
+        )
+        results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
+
+    article_topics: dict[str, list[str]] = {}
+    for row in results:
+        article_topics.setdefault(row["article_id"], []).append(row["topic"])
+
+    logger.info("Loaded topics for %d articles", len(article_topics))
+    return article_topics
+
+
 def upload_stories(
     stories: list[dict[str, Any]],
     session: Any,
