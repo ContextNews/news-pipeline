@@ -59,10 +59,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-link-stories-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-link-stories-${{ runner.os }}-${{ inputs.runner }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --with link_stories
 
       - name: Build command arguments

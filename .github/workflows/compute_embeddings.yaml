@@ -123,10 +123,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-compute-embeddings-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-compute-embeddings-${{ runner.os }}-${{ inputs.runner }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --with compute_embeddings
 
       - name: Build command arguments

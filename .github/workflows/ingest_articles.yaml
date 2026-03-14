@@ -80,10 +80,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-ingest-articles-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-ingest-articles-${{ runner.os }}-${{ inputs.runner }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --with ingest_articles
 
       - name: Build command arguments

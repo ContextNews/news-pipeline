@@ -102,10 +102,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-extract-entities-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-extract-entities-${{ runner.os }}-${{ inputs.runner }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --with extract_entities
 
       - name: Cache spaCy assets
