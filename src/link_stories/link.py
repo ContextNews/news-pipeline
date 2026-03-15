@@ -100,15 +100,15 @@ def load_stories_for_date(target_date: date) -> list[dict[str, Any]]:
             .all()
         )
 
-    return [
-        {
-            "story_id": row.id,
-            "title": row.title,
-            "summary": row.summary,
-            "key_points": row.key_points,
-        }
-        for row in rows
-    ]
+        return [
+            {
+                "story_id": row.id,
+                "title": row.title,
+                "summary": row.summary,
+                "key_points": row.key_points,
+            }
+            for row in rows
+        ]
 
 
 def _load_stories_for_llm(story_ids: list[str]) -> list[dict[str, Any]]:
