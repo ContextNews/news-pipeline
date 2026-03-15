@@ -768,14 +768,30 @@ def upload_stories(
         )
         logger.info("Saved %d topic classifications to RDS", len(topic_rows))
 
-    # Insert story_indicators
-    indicator_rows = []
-    for story in stories:
-        for indicator_id in story.get("ts_indicators", []):
-            indicator_rows.append({
-                "story_id": story["story_id"],
-                "indicator_id": indicator_id,
-            })
+    # Insert story_indicators (only for indicators that exist in ts_indicators)
+    all_indicator_ids = {
+        indicator_id
+        for story in stories
+        for indicator_id in story.get("ts_indicators", [])
+    }
+    if all_indicator_ids:
+        result = session.execute(
+            text("SELECT id FROM ts_indicators WHERE id = ANY(:ids)"),
+            {"ids": list(all_indicator_ids)},
+        )
+        known_indicator_ids = {row[0] for row in result}
+        skipped = all_indicator_ids - known_indicator_ids
+        if skipped:
+            logger.warning("Skipping %d unknown indicator IDs not in ts_indicators: %s", len(skipped), sorted(skipped))
+    else:
+        known_indicator_ids = set()
+
+    indicator_rows = [
+        {"story_id": story["story_id"], "indicator_id": indicator_id}
+        for story in stories
+        for indicator_id in story.get("ts_indicators", [])
+        if indicator_id in known_indicator_ids
+    ]
 
     if indicator_rows:
         session.execute(
