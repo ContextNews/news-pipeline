@@ -74,11 +74,13 @@ jobs:
       # stories
       stories-date: ${{ steps.parse.outputs.stories-date }}
       stories-model: ${{ steps.parse.outputs.stories-model }}
-      stories-classify: ${{ steps.parse.outputs.stories-classify }}
-      stories-link-stories: ${{ steps.parse.outputs.stories-link-stories }}
       stories-overwrite: ${{ steps.parse.outputs.stories-overwrite }}
       stories-load-s3: ${{ steps.parse.outputs.stories-load-s3 }}
       stories-load-rds: ${{ steps.parse.outputs.stories-load-rds }}
+      # link_stories
+      link-stories-model: ${{ steps.parse.outputs.link-stories-model }}
+      link-stories-n-candidates: ${{ steps.parse.outputs.link-stories-n-candidates }}
+      link-stories-delete-existing: ${{ steps.parse.outputs.link-stories-delete-existing }}
     steps:
       - uses: actions/checkout@v4
       - name: Parse config
@@ -150,11 +152,14 @@ jobs:
           # stories
           echo "stories-date=$(val '.stories.date' '')" >> "$GITHUB_OUTPUT"
           echo "stories-model=$(val '.stories.model' 'gpt-4o-mini')" >> "$GITHUB_OUTPUT"
-          echo "stories-classify=$(val '.stories.classify' 'true')" >> "$GITHUB_OUTPUT"
-          echo "stories-link-stories=$(val '.stories.link_stories' 'true')" >> "$GITHUB_OUTPUT"
           echo "stories-overwrite=$(val '.stories.overwrite' 'true')" >> "$GITHUB_OUTPUT"
           echo "stories-load-s3=$(val '.stories.load_s3' 'true')" >> "$GITHUB_OUTPUT"
           echo "stories-load-rds=$(val '.stories.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+
+          # link_stories
+          echo "link-stories-model=$(val '.link_stories.model' 'gpt-4o-mini')" >> "$GITHUB_OUTPUT"
+          echo "link-stories-n-candidates=$(val '.link_stories.n_candidates' '3')" >> "$GITHUB_OUTPUT"
+          echo "link-stories-delete-existing=$(val '.link_stories.delete_existing' 'false')" >> "$GITHUB_OUTPUT"
 
   ingest:
     needs: load-config
@@ -250,8 +255,18 @@ jobs:
       runner: ${{ inputs.runner }}
       cluster-period: ${{ needs.load-config.outputs.stories-date }}
       model: ${{ needs.load-config.outputs.stories-model }}
-      classify: ${{ fromJSON(needs.load-config.outputs.stories-classify) }}
-      link-stories: ${{ fromJSON(needs.load-config.outputs.stories-link-stories) }}
       overwrite: ${{ fromJSON(needs.load-config.outputs.stories-overwrite) }}
       load-s3: ${{ fromJSON(needs.load-config.outputs.stories-load-s3) }}
       load-rds: ${{ fromJSON(needs.load-config.outputs.stories-load-rds) }}
+
+  # Link today's stories to related stories from the previous day
+  link-stories:
+    needs: [generate-stories, load-config]
+    uses: ./.github/workflows/link_stories.yaml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      date-b: ${{ needs.load-config.outputs.stories-date }}
+      model: ${{ needs.load-config.outputs.link-stories-model }}
+      n-candidates: ${{ fromJSON(needs.load-config.outputs.link-stories-n-candidates) }}
+      delete-existing: ${{ fromJSON(needs.load-config.outputs.link-stories-delete-existing) }}

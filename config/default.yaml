@@ -56,8 +56,11 @@ classify:
 stories:
   date: ""
   model: gpt-4o-mini
-  classify: true
-  link_stories: true
   overwrite: true
   load_s3: false
   load_rds: true
+
+link_stories:
+  model: gpt-4o-mini
+  n_candidates: 3
+  delete_existing: false

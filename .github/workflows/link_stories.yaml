@@ -1,6 +1,26 @@
 name: Link Stories
 
 on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        default: 'github'
+      date-a:
+        type: string
+        default: ''
+      date-b:
+        type: string
+        default: ''
+      model:
+        type: string
+        default: 'gpt-4o-mini'
+      n-candidates:
+        type: number
+        default: 3
+      delete-existing:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       runner:
@@ -67,7 +87,15 @@ jobs:
       - name: Build command arguments
         id: build-args
         run: |
-          ARGS="--date-a ${{ inputs.date-a }} --date-b ${{ inputs.date-b }}"
+          DATE_B="${{ inputs.date-b }}"
+          if [ -z "$DATE_B" ]; then
+            DATE_B=$(date -u +%F)
+          fi
+          DATE_A="${{ inputs.date-a }}"
+          if [ -z "$DATE_A" ]; then
+            DATE_A=$(date -u -d "$DATE_B - 1 day" +%F)
+          fi
+          ARGS="--date-a $DATE_A --date-b $DATE_B"
           ARGS="$ARGS --model ${{ inputs.model }}"
           ARGS="$ARGS --n-candidates ${{ inputs.n-candidates }}"
           ARGS="$ARGS --load-rds"
