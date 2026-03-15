@@ -377,7 +377,7 @@ pydantic = ">=1.7.4,<1.8 || >1.8,<1.8.1 || >1.8.1,<3.0.0"
 srsly = ">=2.4.0,<3.0.0"
 
 [[package]]
-name = "context-data-schema"
+name = "context-db"
 version = "0.1.0"
 description = "Shared database models and migrations"
 optional = false
@@ -396,9 +396,9 @@ sqlalchemy = "^2.0.29"
 
 [package.source]
 type = "git"
-url = "https://github.com/ContextNews/context-data-schemas.git"
+url = "https://github.com/ContextNews/context-db.git"
 reference = "HEAD"
-resolved_reference = "ee6e4562d8dc9bf4382f381fee738286b0f839cf"
+resolved_reference = "25822b6e47d1878754d06e062c86613c45ce826d"
 
 [[package]]
 name = "courlan"
@@ -4073,4 +4073,4 @@ dev = ["pytest", "setuptools"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "126e039fd2ac1043651d7c6d0fe9d1e6670123aa6fd1107dbf4929f49713b3fc"
+content-hash = "5be502ed0b508b05f98b4d8f02e34e29d55b299cf2f2e65ddac511b096a014cf"
