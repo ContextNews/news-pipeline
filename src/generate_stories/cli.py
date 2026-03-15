@@ -11,6 +11,7 @@ from context_db.connection import get_session
 
 from generate_stories.generate_stories import generate_story
 from generate_stories.helpers import parse_generate_stories_args, build_story_record
+from generate_stories.topic_indicators import get_indicators_for_topics
 from common.aws import load_clusters, load_article_locations, load_article_persons, load_article_topics, upload_stories, upload_jsonl_to_s3, build_s3_key
 from common.cli_helpers import setup_logging, save_jsonl_local
 
@@ -98,6 +99,10 @@ def main() -> None:
         for story in stories:
             story["topics"] = topics_by_id.get(story["story_id"], [])
         logger.info("Classified %d of %d stories", len(classified), len(stories))
+
+    # Attach time series indicators based on topics
+    for story in stories:
+        story["ts_indicators"] = get_indicators_for_topics(story.get("topics", []))
 
     if args.load_s3:
         bucket_key = build_s3_key(

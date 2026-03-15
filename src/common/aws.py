@@ -645,7 +645,7 @@ def upload_stories(
             ),
             {"start": start, "end": end},
         )
-        for table in ("story_entities", "story_articles", "story_topics"):
+        for table in ("story_entities", "story_articles", "story_topics", "story_indicators"):
             session.execute(
                 text(
                     f"""
@@ -767,6 +767,28 @@ def upload_stories(
             topic_rows,
         )
         logger.info("Saved %d topic classifications to RDS", len(topic_rows))
+
+    # Insert story_indicators
+    indicator_rows = []
+    for story in stories:
+        for indicator_id in story.get("ts_indicators", []):
+            indicator_rows.append({
+                "story_id": story["story_id"],
+                "indicator_id": indicator_id,
+            })
+
+    if indicator_rows:
+        session.execute(
+            text(
+                """
+                INSERT INTO story_indicators (story_id, indicator_id)
+                VALUES (:story_id, :indicator_id)
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            indicator_rows,
+        )
+        logger.info("Saved %d story indicator links to RDS", len(indicator_rows))
 
     session.commit()
     logger.info("Saved %d stories to RDS", len(stories))
