@@ -101,8 +101,16 @@ def main() -> None:
         logger.info("Classified %d of %d stories", len(classified), len(stories))
 
     # Attach time series indicators based on topics
+    total_indicators = 0
     for story in stories:
-        story["ts_indicators"] = get_indicators_for_topics(story.get("topics", []))
+        indicators = get_indicators_for_topics(story.get("topics", []))
+        story["ts_indicators"] = indicators
+        total_indicators += len(indicators)
+        logger.info(
+            "  Story %s | topics=%s -> %d indicators: %s",
+            story["story_id"], story.get("topics", []), len(indicators), indicators,
+        )
+    logger.info("Attached %d indicator links across %d stories", total_indicators, len(stories))
 
     if args.load_s3:
         bucket_key = build_s3_key(
