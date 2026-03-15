@@ -31,7 +31,7 @@ def get_indicators_for_topics(topics: list[str]) -> list[str]:
     seen: set[str] = set()
     indicators: list[str] = []
     for topic in topics:
-        for code in TOPIC_INDICATORS.get(topic, []):
+        for code in TOPIC_INDICATORS.get(topic.title(), []):
             if code not in seen:
                 seen.add(code)
                 indicators.append(code)
