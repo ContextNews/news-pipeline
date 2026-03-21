@@ -879,19 +879,25 @@ def load_entities_for_resolution(
     return dict(gpe_entities), dict(person_entities)
 
 
-def load_location_aliases() -> dict[str, list]:
+def load_location_aliases(aliases: set[str]) -> dict[str, list]:
     """
-    Load all location aliases with their candidate locations from RDS.
+    Load location aliases for the given alias strings from RDS.
+
+    Args:
+        aliases: Uppercase alias strings to look up.
 
     Returns: {ALIAS_UPPER: [LocationCandidate, ...]}
     """
+    if not aliases:
+        return {}
+
     from collections import defaultdict
 
-    from sqlalchemy import text
+    from sqlalchemy import bindparam, text
     from context_db.connection import get_session
     from resolve_entities.models import LocationCandidate
 
-    logger.info("Loading location aliases from RDS")
+    logger.info("Loading location aliases from RDS (%d aliases)", len(aliases))
     with get_session() as session:
         stmt = text(
             """
@@ -905,9 +911,10 @@ def load_location_aliases() -> dict[str, list]:
             JOIN kb_entities ke ON ke.qid = kea.qid
             JOIN kb_locations kl ON kl.qid = kea.qid
             WHERE ke.entity_type = 'location'
+              AND UPPER(kea.alias) IN :aliases
             """
-        )
-        results = session.execute(stmt).all()
+        ).bindparams(bindparam("aliases", expanding=True))
+        results = session.execute(stmt, {"aliases": list(aliases)}).all()
 
     alias_to_locations: dict[str, list[LocationCandidate]] = defaultdict(list)
     for row in results:
@@ -924,19 +931,25 @@ def load_location_aliases() -> dict[str, list]:
     return dict(alias_to_locations)
 
 
-def load_person_aliases() -> dict[str, list]:
+def load_person_aliases(aliases: set[str]) -> dict[str, list]:
     """
-    Load all person aliases with their candidate persons from RDS.
+    Load person aliases for the given alias strings from RDS.
+
+    Args:
+        aliases: Uppercase alias strings to look up.
 
     Returns: {ALIAS_UPPER: [PersonCandidate, ...]}
     """
+    if not aliases:
+        return {}
+
     from collections import defaultdict
 
-    from sqlalchemy import text
+    from sqlalchemy import bindparam, text
     from context_db.connection import get_session
     from resolve_entities.models import PersonCandidate
 
-    logger.info("Loading person aliases from RDS")
+    logger.info("Loading person aliases from RDS (%d aliases)", len(aliases))
     with get_session() as session:
         stmt = text(
             """
@@ -950,9 +963,10 @@ def load_person_aliases() -> dict[str, list]:
             JOIN kb_entities ke ON ke.qid = kea.qid
             JOIN kb_persons kp ON kp.qid = kea.qid
             WHERE ke.entity_type = 'person'
+              AND UPPER(kea.alias) IN :aliases
             """
-        )
-        results = session.execute(stmt).all()
+        ).bindparams(bindparam("aliases", expanding=True))
+        results = session.execute(stmt, {"aliases": list(aliases)}).all()
 
     alias_to_persons: dict[str, list[PersonCandidate]] = defaultdict(list)
     for row in results:

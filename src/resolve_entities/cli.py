@@ -37,8 +37,11 @@ def main() -> None:
         logger.warning("No entities to resolve")
         return
 
-    alias_to_locations = load_location_aliases()
-    alias_to_persons = load_person_aliases()
+    gpe_names = {name for names in gpe_entities.values() for name in names}
+    person_names = {name for names in person_entities.values() for name in names}
+
+    alias_to_locations = load_location_aliases(gpe_names)
+    alias_to_persons = load_person_aliases(person_names)
 
     if not alias_to_locations and not alias_to_persons:
         logger.warning("No alias reference data found")
