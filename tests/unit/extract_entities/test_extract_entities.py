@@ -119,20 +119,13 @@ class TestExtractEntities:
         mock_ent = MagicMock()
         mock_ent.text = "London"
         mock_ent.label_ = "GPE"
+        mock_ent.start_char = 0
 
         # Mock doc returned by nlp.pipe
         mock_doc = MagicMock()
         mock_doc.ents = [mock_ent]
 
-        # Mock doc returned by nlp() for title
-        mock_title_doc = MagicMock()
-        mock_title_ent = MagicMock()
-        mock_title_ent.text = "London"
-        mock_title_ent.label_ = "GPE"
-        mock_title_doc.ents = [mock_title_ent]
-
         mock_nlp.pipe.return_value = iter([mock_doc])
-        mock_nlp.return_value = mock_title_doc
         mock_spacy.load.return_value = mock_nlp
 
         articles = [{"id": "a1", "title": "London news", "summary": "", "text": ""}]

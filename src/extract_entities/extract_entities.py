@@ -139,6 +139,8 @@ def extract_entities(
         name_first_label: dict[str, str] = {}
         name_label_counts: dict[str, dict[str, int]] = {}
         name_total_counts: dict[str, int] = {}
+        name_in_title: dict[str, bool] = {}
+        title_end = len(row["title"]) if row["title"] else 0
 
         for ent in doc.ents:
             if ent.label_ not in allowed_labels:
@@ -159,21 +161,7 @@ def extract_entities(
             name_total_counts[entity_name] = name_total_counts.get(entity_name, 0) + 1
             label_counts = name_label_counts.setdefault(entity_name, {})
             label_counts[ent.label_] = label_counts.get(ent.label_, 0) + 1
-
-        title_names: set[str] = set()
-        if row["title"]:
-            title_doc = nlp(row["title"])
-            for ent in title_doc.ents:
-                if ent.label_ not in allowed_labels:
-                    continue
-                name = _normalize_entity_name(ent.text)
-                if ent.label_ == "GPE":
-                    name = _normalize_gpe_name(name)
-                    normalized_country = _normalize_country_name(name)
-                    if normalized_country:
-                        name = normalized_country
-                if name:
-                    title_names.add(name)
+            name_in_title[entity_name] = name_in_title.get(entity_name, False) or (ent.start_char < title_end)
 
         entities: list[ArticleEntity] = []
         order_index = {name: index for index, name in enumerate(name_order)}
@@ -190,7 +178,7 @@ def extract_entities(
                     article_id=row["id"],
                     entity_type=chosen_label,
                     entity_name=entity_name,
-                    in_title=entity_name in title_names,
+                    in_title=name_in_title.get(entity_name, False),
                     count=name_total_counts[entity_name],
                     aliases=None,
                 )
