@@ -93,6 +93,7 @@ pythonpath = [
     ".",
     "src",
 ]
+addopts = ["-m", "not integration"]
 markers = [
     "integration: tests that call external services",
 ]
