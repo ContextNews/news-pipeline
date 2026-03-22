@@ -72,7 +72,10 @@ def _try_enrich(
     if entity_type == "location":
         location = classify_as_location(chosen.qid, entity_data, delay)
         if not location:
-            logger.debug("QID %s is not a location, skipping '%s'", chosen.qid, name)
+            logger.info(
+                "Skipping '%s' — [%s] %r is not a recognised location type",
+                name, chosen.qid, chosen.label,
+            )
             return None
         person = None
         canonical_name = location.name
@@ -80,7 +83,10 @@ def _try_enrich(
     else:
         person = classify_as_person(chosen.qid, entity_data, delay)
         if not person:
-            logger.debug("QID %s is not a person, skipping '%s'", chosen.qid, name)
+            logger.info(
+                "Skipping '%s' — [%s] %r is not a person",
+                name, chosen.qid, chosen.label,
+            )
             return None
         location = None
         canonical_name = person.name
@@ -92,7 +98,7 @@ def _try_enrich(
         aliases.append(name)
     aliases = sorted(set(aliases))
 
-    return EnrichedEntity(
+    enriched = EnrichedEntity(
         entity_name=name,
         entity_type=entity_type,
         qid=chosen.qid,
@@ -103,6 +109,15 @@ def _try_enrich(
         aliases=aliases,
         article_ids=list(dict.fromkeys(article_ids)),
     )
+    logger.info(
+        "Resolved '%s' → [%s] %r (%s) | aliases: %s",
+        name,
+        enriched.qid,
+        enriched.name,
+        enriched.description or "no description",
+        ", ".join(enriched.aliases),
+    )
+    return enriched
 
 
 def _disambiguate(
@@ -117,7 +132,7 @@ def _disambiguate(
     Skips ambiguous cases to avoid polluting the KB with incorrect entries.
     """
     if not candidates:
-        logger.debug("No Wikidata candidates found for: %s", name)
+        logger.info("No Wikidata candidates found for: '%s'", name)
         return None
 
     if len(candidates) == 1:
@@ -127,9 +142,14 @@ def _disambiguate(
     if len(exact) == 1:
         return exact[0]
 
+    candidate_summary = " | ".join(
+        f"[{c.qid}] {c.label!r} ({c.description or 'no description'})"
+        for c in candidates
+    )
     logger.info(
-        "Ambiguous Wikidata results for '%s' (%d candidates), skipping",
+        "Skipping '%s' — ambiguous (%d candidates): %s",
         name,
         len(candidates),
+        candidate_summary,
     )
     return None
