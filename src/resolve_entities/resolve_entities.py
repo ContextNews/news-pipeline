@@ -70,6 +70,8 @@ def _resolve_locations(
         for name in entity_names:
             if name in alias_to_locations:
                 entity_candidates[name] = alias_to_locations[name]
+            else:
+                logger.debug("No location alias found for GPE entity: %s", name)
 
         context = _build_location_context(entity_candidates)
 
@@ -172,6 +174,7 @@ def _resolve_persons(
         for entity_name in entity_names:
             candidates = alias_to_persons.get(entity_name, [])
             if not candidates:
+                logger.debug("No person alias found for PERSON entity: %s", entity_name)
                 continue
 
             resolved = _disambiguate_person(candidates, country_context)
