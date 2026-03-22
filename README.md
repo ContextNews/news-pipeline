@@ -14,6 +14,7 @@ The repository contains standalone stages under `src/`:
 6. `classify_articles` - classify articles by topic using a HuggingFace text-classification model.
 7. `generate_stories` - generate story overviews from clusters; optional topic classification and previous-day linking.
 8. `link_stories` - standalone stage to link stories between any two dates.
+9. `enrich_entities` - standalone stage to grow the knowledge base by looking up unresolved entity names on Wikidata and adding confirmed matches.
 
 Shared helpers live in `src/common`.
 
@@ -50,9 +51,11 @@ flowchart TD
     I --> H
 ```
 
-### Standalone linking workflow
+### Standalone workflows
 
-`Link Stories` (`.github/workflows/link_stories.yaml`) is manual-only and **not** part of the main orchestrated pipeline.
+`Link Stories` (`.github/workflows/link_stories.yaml`) and `Enrich Entities` (`.github/workflows/enrich_entities.yaml`) are manual-only and **not** part of the main orchestrated pipeline.
+
+#### Link Stories
 
 Inputs:
 
@@ -61,6 +64,15 @@ Inputs:
 - `model` (default `gpt-4o-mini`)
 - `n-candidates` (default `3`)
 - `delete-existing` (default `false`)
+
+#### Enrich Entities
+
+Inputs:
+
+- `published-date` (default: today UTC)
+- `overwrite` (default `false`)
+- `delay` — seconds between Wikidata API calls (default `0.5`)
+- `load-rds` (default `true`)
 
 ## Setup
 
@@ -105,6 +117,9 @@ poetry run python -m generate_stories --cluster-period 2026-02-01 --model gpt-4o
 
 # Standalone story linking (between arbitrary dates)
 poetry run python -m link_stories --date-a 2026-02-01 --date-b 2026-02-02 --n-candidates 3 --delete-existing --load-rds
+
+# Enrich knowledge base with Wikidata lookups for unresolved entities
+poetry run python -m enrich_entities --published-date 2026-02-01 --delay 0.5 --load-rds
 ```
 
 ## Stage outputs
@@ -114,7 +129,8 @@ Primary RDS targets written by each stage:
 - `ingest_articles`: `articles`
 - `compute_embeddings`: `article_embeddings`
 - `extract_entities`: `entities`, `article_entities`
-- `resolve_entities`: `article_locations`, `article_persons`
+- `resolve_entities`: `article_entities_resolved` (locations and persons)
+- `enrich_entities`: `kb_entities`, `kb_locations` / `kb_persons`, `kb_entity_aliases`, `article_entities_resolved`
 - `cluster_articles`: `article_clusters`, `article_cluster_articles`
 - `classify_articles`: `article_topics`
 - `generate_stories`: `stories`, `article_stories`, plus story metadata/link tables (for example `story_locations`, `story_persons`, `story_topics`, `story_stories`)
@@ -133,6 +149,7 @@ S3 outputs use partitioned keys built as:
 - `.github/workflows/cluster_articles.yaml`
 - `.github/workflows/generate_stories.yaml`
 - `.github/workflows/link_stories.yaml`
+- `.github/workflows/enrich_entities.yaml`
 - `.github/workflows/run_pipeline.yaml`
 
 Each stage workflow sets up AWS credentials, a database connection, and runs the corresponding CLI command with built arguments.

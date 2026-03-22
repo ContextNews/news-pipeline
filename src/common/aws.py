@@ -1083,6 +1083,119 @@ def upload_resolved_persons(
     logger.info("Upserted %d article person entities into RDS", len(records))
 
 
+def upload_enriched_entities(
+    enriched: list,
+    session: Any,
+    overwrite: bool = False,
+) -> None:
+    """
+    Write enriched entities to the knowledge base and link them to articles.
+
+    For each EnrichedEntity, upserts into kb_entities, kb_locations or kb_persons,
+    kb_entity_aliases, and article_entities_resolved.
+
+    Args:
+        enriched: List of EnrichedEntity dataclass instances
+        session: SQLAlchemy session
+        overwrite: If True, delete and re-insert aliases before inserting (cleans stale aliases)
+    """
+    from sqlalchemy import text
+
+    if not enriched:
+        return
+
+    for entity in enriched:
+        # 1. Upsert into kb_entities
+        session.execute(
+            text(
+                """
+                INSERT INTO kb_entities (qid, name, description, entity_type)
+                VALUES (:qid, :name, :description, :entity_type)
+                ON CONFLICT (qid) DO UPDATE
+                  SET name = EXCLUDED.name,
+                      description = EXCLUDED.description
+                """
+            ),
+            {
+                "qid": entity.qid,
+                "name": entity.name,
+                "description": entity.description,
+                "entity_type": entity.entity_type,
+            },
+        )
+
+        # 2. Upsert into kb_locations or kb_persons
+        if entity.entity_type == "location" and entity.location:
+            session.execute(
+                text(
+                    """
+                    INSERT INTO kb_locations (qid, location_type, country_code)
+                    VALUES (:qid, :location_type, :country_code)
+                    ON CONFLICT (qid) DO UPDATE
+                      SET location_type = EXCLUDED.location_type,
+                          country_code = EXCLUDED.country_code
+                    """
+                ),
+                {
+                    "qid": entity.qid,
+                    "location_type": entity.location.location_type,
+                    "country_code": entity.location.country_code,
+                },
+            )
+        elif entity.entity_type == "person" and entity.person:
+            session.execute(
+                text(
+                    """
+                    INSERT INTO kb_persons (qid, nationalities)
+                    VALUES (:qid, :nationalities)
+                    ON CONFLICT (qid) DO UPDATE
+                      SET nationalities = EXCLUDED.nationalities
+                    """
+                ),
+                {
+                    "qid": entity.qid,
+                    "nationalities": entity.person.nationalities,
+                },
+            )
+
+        # 3. Upsert aliases into kb_entity_aliases
+        if overwrite:
+            session.execute(
+                text("DELETE FROM kb_entity_aliases WHERE qid = :qid"),
+                {"qid": entity.qid},
+            )
+        if entity.aliases:
+            session.execute(
+                text(
+                    """
+                    INSERT INTO kb_entity_aliases (qid, alias)
+                    VALUES (:qid, :alias)
+                    ON CONFLICT DO NOTHING
+                    """
+                ),
+                [{"qid": entity.qid, "alias": alias} for alias in entity.aliases],
+            )
+
+        # 4. Link articles to the new KB entity
+        if entity.article_ids:
+            session.execute(
+                text(
+                    """
+                    INSERT INTO article_entities_resolved (article_id, qid, score)
+                    VALUES (:article_id, :qid, NULL)
+                    ON CONFLICT DO NOTHING
+                    """
+                ),
+                [
+                    {"article_id": article_id, "qid": entity.qid}
+                    for article_id in entity.article_ids
+                ],
+            )
+
+    session.commit()
+    logger.info("Uploaded %d enriched entities to RDS", len(enriched))
+
+
 def load_articles_for_classification(
     published_date: date,
     overwrite: bool,

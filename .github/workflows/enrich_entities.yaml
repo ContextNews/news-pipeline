@@ -1,0 +1,85 @@
+name: Enrich Entities
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner to use'
+        type: choice
+        options:
+          - github
+          - aws
+        default: 'github'
+      published-date:
+        description: 'Enrich entities from articles published on this date (UTC, YYYY-MM-DD)'
+        type: string
+        required: false
+        default: ''
+      overwrite:
+        description: 'Re-enrich entities already in KB'
+        type: boolean
+        default: false
+      delay:
+        description: 'Seconds between Wikidata API calls'
+        type: string
+        default: '0.5'
+      load-rds:
+        description: 'Write new entities to KB and link to articles in RDS'
+        type: boolean
+        default: true
+
+jobs:
+  enrich-entities:
+    runs-on: ${{ inputs.runner == 'aws' && 'self-hosted' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: inputs.runner != 'aws'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        if: inputs.runner != 'aws'
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-enrich-entities-${{ runner.os }}-${{ inputs.runner }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Build command arguments
+        id: build-args
+        run: |
+          if [ -n "${{ inputs.published-date }}" ]; then
+            ARGS="--published-date ${{ inputs.published-date }}"
+          else
+            ARGS="--published-date $(date -u +%F)"
+          fi
+          if [ "${{ inputs.overwrite }}" = "true" ]; then
+            ARGS="$ARGS --overwrite"
+          fi
+          ARGS="$ARGS --delay ${{ inputs.delay }}"
+          if [ "${{ inputs.load-rds }}" = "true" ]; then
+            ARGS="$ARGS --load-rds"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Run enrich_entities
+        env:
+          PYTHONPATH: src
+          DATABASE_URL: ${{ secrets.NEON_DB_URL }}
+        run: poetry run python -m enrich_entities ${{ steps.build-args.outputs.args }}
