@@ -16,6 +16,10 @@ The repository contains standalone stages under `src/`:
 8. `link_stories` - standalone stage to link stories between any two dates.
 9. `enrich_entities` - standalone stage to grow the knowledge base by looking up unresolved entity names on Wikidata and adding confirmed matches.
 
+A maintenance stage also lives under `src/`:
+
+- `purge` - deletes intermediate pipeline data (embeddings, entity mentions, clusters, etc.) for articles older than a configurable retention window, while preserving stories indefinitely.
+
 Shared helpers live in `src/common`.
 
 ## Orchestration
@@ -55,6 +59,8 @@ flowchart TD
 
 `Link Stories` (`.github/workflows/link_stories.yaml`) and `Enrich Entities` (`.github/workflows/enrich_entities.yaml`) are manual-only and **not** part of the main orchestrated pipeline.
 
+`Purge` (`.github/workflows/purge.yaml`) runs daily at 02:00 UTC and can also be triggered manually.
+
 #### Link Stories
 
 Inputs:
@@ -73,6 +79,16 @@ Inputs:
 - `overwrite` (default `false`)
 - `delay` — seconds between Wikidata API calls (default `0.5`)
 - `load-rds` (default `true`)
+
+#### Purge
+
+Deletes intermediate pipeline data (embeddings, entity mentions, cluster memberships, etc.) for articles older than the retention window. Stories and knowledge base tables are never touched.
+
+Inputs:
+
+- `retention-days` (default `30`)
+- `dry-run` — preview row counts without deleting (default `false`)
+- `no-vacuum` — skip `VACUUM ANALYZE` after deletion (default `false`)
 
 ## Setup
 
@@ -120,6 +136,10 @@ poetry run python -m link_stories --date-a 2026-02-01 --date-b 2026-02-02 --n-ca
 
 # Enrich knowledge base with Wikidata lookups for unresolved entities
 poetry run python -m enrich_entities --published-date 2026-02-01 --delay 0.5 --load-rds
+
+# Purge intermediate data older than 30 days (use --dry-run to preview)
+poetry run python -m purge --retention-days 30 --dry-run
+poetry run python -m purge --retention-days 30
 ```
 
 ## Stage outputs
@@ -150,6 +170,7 @@ S3 outputs use partitioned keys built as:
 - `.github/workflows/generate_stories.yaml`
 - `.github/workflows/link_stories.yaml`
 - `.github/workflows/enrich_entities.yaml`
+- `.github/workflows/purge.yaml`
 - `.github/workflows/run_pipeline.yaml`
 
 Each stage workflow sets up AWS credentials, a database connection, and runs the corresponding CLI command with built arguments.

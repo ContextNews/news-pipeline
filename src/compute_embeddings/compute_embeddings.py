@@ -130,7 +130,7 @@ def compute_embeddings(
 
     # Build result objects
     results = []
-    for article, embedded_text, embedding in zip(valid_articles, texts_to_embed, embeddings):
+    for article, embedding in zip(valid_articles, embeddings):
         results.append(
             EmbeddedArticle(
                 id=get_value(article, "id"),
@@ -141,7 +141,6 @@ def compute_embeddings(
                 published_at=get_value(article, "published_at"),
                 ingested_at=get_value(article, "ingested_at"),
                 text=get_value(article, "text"),
-                embedded_text=embedded_text,
                 embedding=embedding.tolist(),
                 embedding_model=model,
             )

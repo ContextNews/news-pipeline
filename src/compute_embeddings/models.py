@@ -16,6 +16,5 @@ class EmbeddedArticle:
     published_at: datetime
     ingested_at: datetime
     text: Optional[str]
-    embedded_text: str
     embedding: list[float]
     embedding_model: str

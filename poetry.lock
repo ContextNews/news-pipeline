@@ -398,7 +398,7 @@ sqlalchemy = "^2.0.29"
 type = "git"
 url = "https://github.com/ContextNews/context-db.git"
 reference = "HEAD"
-resolved_reference = "25822b6e47d1878754d06e062c86613c45ce826d"
+resolved_reference = "c684d94a48be93f0c83b2371a9247537f1bcb030"
 
 [[package]]
 name = "courlan"

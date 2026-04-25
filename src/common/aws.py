@@ -240,7 +240,7 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
 
     Args:
         embeddings: List of embedding objects with fields:
-            id, embedded_text, embedding, embedding_model
+            id, embedding, embedding_model
         session: SQLAlchemy session
     """
     from sqlalchemy import text
@@ -251,7 +251,6 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
     for embedding in embeddings:
         params = {
             "article_id": embedding.id,
-            "embedded_text": embedding.embedded_text,
             "embedding": embedding.embedding,
             "embedding_model": embedding.embedding_model,
             "created_at": datetime.now(timezone.utc),
@@ -259,8 +258,7 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
         update_stmt = text(
             """
             UPDATE article_embeddings
-            SET embedded_text = :embedded_text,
-                embedding = :embedding,
+            SET embedding = :embedding,
                 created_at = :created_at
             WHERE article_id = :article_id
               AND embedding_model = :embedding_model
@@ -274,9 +272,9 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
         insert_stmt = text(
             """
             INSERT INTO article_embeddings
-                (article_id, embedded_text, embedding, embedding_model, created_at)
+                (article_id, embedding, embedding_model, created_at)
             VALUES
-                (:article_id, :embedded_text, :embedding, :embedding_model, :created_at)
+                (:article_id, :embedding, :embedding_model, :created_at)
             """
         )
         session.execute(insert_stmt, params)
