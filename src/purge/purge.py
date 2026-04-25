@@ -77,7 +77,7 @@ def purge(session, retention_days: int, dry_run: bool) -> dict[str, int]:
         result = session.execute(
             text("""
                 SELECT COUNT(*) FROM article_clusters
-                WHERE id NOT IN (SELECT DISTINCT article_cluster_id FROM article_cluster_articles)
+                WHERE article_cluster_id NOT IN (SELECT DISTINCT article_cluster_id FROM article_cluster_articles)
             """)
         )
         counts["article_clusters"] = result.scalar()
@@ -85,7 +85,7 @@ def purge(session, retention_days: int, dry_run: bool) -> dict[str, int]:
         result = session.execute(
             text("""
                 DELETE FROM article_clusters
-                WHERE id NOT IN (SELECT DISTINCT article_cluster_id FROM article_cluster_articles)
+                WHERE article_cluster_id NOT IN (SELECT DISTINCT article_cluster_id FROM article_cluster_articles)
             """)
         )
         counts["article_clusters"] = result.rowcount
