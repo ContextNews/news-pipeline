@@ -48,6 +48,12 @@ spacy = ">=3.7"
 spacy-transformers = ">=1.3"
 pycountry = ">=24.6"
 
+# Enrich entities service dependencies
+[tool.poetry.group.enrich_entities]
+optional = true
+[tool.poetry.group.enrich_entities.dependencies]
+requests = ">=2.32,<3.0"
+
 # Cluster articles service dependencies
 [tool.poetry.group.cluster_articles]
 optional = true

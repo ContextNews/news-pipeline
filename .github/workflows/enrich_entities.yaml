@@ -61,7 +61,7 @@ jobs:
           key: venv-enrich-entities-${{ runner.os }}-${{ inputs.runner }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        run: poetry install --no-interaction
+        run: poetry install --no-interaction --with enrich_entities
 
       - name: Build command arguments
         id: build-args
