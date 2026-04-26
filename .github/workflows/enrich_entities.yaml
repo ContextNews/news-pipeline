@@ -1,6 +1,8 @@
 name: Enrich Entities
 
 on:
+  schedule:
+    - cron: "0 10,16 * * *"
   workflow_dispatch:
     inputs:
       runner:
@@ -72,8 +74,8 @@ jobs:
           if [ "${{ inputs.overwrite }}" = "true" ]; then
             ARGS="$ARGS --overwrite"
           fi
-          ARGS="$ARGS --delay ${{ inputs.delay }}"
-          if [ "${{ inputs.load-rds }}" = "true" ]; then
+          ARGS="$ARGS --delay ${{ inputs.delay || '0.5' }}"
+          if [ "${{ inputs.load-rds }}" != "false" ]; then
             ARGS="$ARGS --load-rds"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT

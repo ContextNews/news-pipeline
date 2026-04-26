@@ -1189,8 +1189,9 @@ def upload_enriched_entities(
             )
 
         # 4. Link articles to the new KB entity
+        links_inserted = 0
         if entity.article_ids:
-            session.execute(
+            result = session.execute(
                 text(
                     """
                     INSERT INTO article_entities_resolved (article_id, qid, score)
@@ -1203,6 +1204,16 @@ def upload_enriched_entities(
                     for article_id in entity.article_ids
                 ],
             )
+            links_inserted = result.rowcount
+
+        logger.info(
+            "Wrote [%s] %s (%s) → %s | %d article link(s)",
+            entity.entity_type,
+            entity.entity_name,
+            entity.qid,
+            entity.name,
+            links_inserted,
+        )
 
     session.commit()
     logger.info("Uploaded %d enriched entities to RDS", len(enriched))

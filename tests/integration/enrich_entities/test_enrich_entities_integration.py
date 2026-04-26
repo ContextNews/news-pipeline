@@ -7,8 +7,11 @@ Run with:
     poetry run pytest -m integration -s --log-cli-level=INFO
 """
 
+import dataclasses
+import json
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -23,6 +26,8 @@ pytestmark = pytest.mark.integration
 # Maximum number of unresolved entities of each type to send to Wikidata.
 # Keeps the test fast and avoids hammering the API.
 SAMPLE_SIZE = 5
+
+DATA_DIR = Path(__file__).parents[2] / "data"
 
 
 @pytest.fixture(scope="module")
@@ -106,19 +111,31 @@ def unresolved_sample() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     return sample_gpe, sample_persons
 
 
-def test_enrich_entities_runs_without_error(unresolved_sample) -> None:
-    """enrich_entities completes without raising against real Wikidata."""
+@pytest.fixture(scope="module")
+def enriched_results(unresolved_sample):
+    """Run enrichment once and save results to tests/data/."""
     sample_gpe, sample_persons = unresolved_sample
     results = enrich_entities(sample_gpe, sample_persons, delay=0.5)
     logger.info("Wikidata returned %d enriched entities", len(results))
 
+    DATA_DIR.mkdir(exist_ok=True)
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    output_path = DATA_DIR / f"enrich_entities_{date_str}.json"
+    with open(output_path, "w") as f:
+        json.dump([dataclasses.asdict(e) for e in results], f, indent=2)
+    logger.info("Saved enriched entities to %s", output_path)
 
-def test_enriched_entities_have_valid_structure(unresolved_sample) -> None:
+    return results
+
+
+def test_enrich_entities_runs_without_error(enriched_results) -> None:
+    """enrich_entities completes without raising against real Wikidata."""
+    pass
+
+
+def test_enriched_entities_have_valid_structure(enriched_results) -> None:
     """Every returned EnrichedEntity has the required fields correctly populated."""
-    sample_gpe, sample_persons = unresolved_sample
-    results = enrich_entities(sample_gpe, sample_persons, delay=0.5)
-
-    for entity in results:
+    for entity in enriched_results:
         logger.info(
             "  [%s] '%s' → %s '%s' | aliases=%s | articles=%d",
             entity.entity_type,
@@ -147,12 +164,9 @@ def test_enriched_entities_have_valid_structure(unresolved_sample) -> None:
             assert entity.location is None
 
 
-def test_original_entity_name_included_in_aliases(unresolved_sample) -> None:
+def test_original_entity_name_included_in_aliases(enriched_results) -> None:
     """The original extracted entity name should always be traceable via aliases."""
-    sample_gpe, sample_persons = unresolved_sample
-    results = enrich_entities(sample_gpe, sample_persons, delay=0.5)
-
-    for entity in results:
+    for entity in enriched_results:
         aliases_upper = [a.upper() for a in entity.aliases]
         assert entity.entity_name.upper() in aliases_upper or entity.name.upper() in aliases_upper, (
             f"Neither entity_name '{entity.entity_name}' nor canonical name '{entity.name}' "
@@ -160,7 +174,7 @@ def test_original_entity_name_included_in_aliases(unresolved_sample) -> None:
         )
 
 
-def test_article_ids_are_subset_of_input(unresolved_sample) -> None:
+def test_article_ids_are_subset_of_input(unresolved_sample, enriched_results) -> None:
     """Article IDs on enriched entities must come from the input data."""
     sample_gpe, sample_persons = unresolved_sample
     all_input_article_ids = {
@@ -169,9 +183,7 @@ def test_article_ids_are_subset_of_input(unresolved_sample) -> None:
         for article_id in ids
     }
 
-    results = enrich_entities(sample_gpe, sample_persons, delay=0.5)
-
-    for entity in results:
+    for entity in enriched_results:
         for article_id in entity.article_ids:
             assert article_id in all_input_article_ids, (
                 f"Unexpected article_id '{article_id}' on entity '{entity.entity_name}'"
