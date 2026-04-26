@@ -643,6 +643,20 @@ def upload_stories(
             ),
             {"start": start, "end": end},
         )
+        session.execute(
+            text(
+                """
+                UPDATE tg_structured_posts
+                SET story_id = NULL
+                WHERE story_id IN (
+                    SELECT id FROM stories
+                    WHERE story_period >= :start
+                      AND story_period < :end
+                )
+                """
+            ),
+            {"start": start, "end": end},
+        )
         for table in ("story_entities", "story_articles", "story_topics", "story_indicators"):
             session.execute(
                 text(
