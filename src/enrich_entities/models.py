@@ -33,6 +33,7 @@ class KBPerson:
     name: str
     description: str | None
     nationalities: list[str] | None  # ISO 3166-1 alpha-2 country codes
+    image_url: str | None = None
 
 
 @dataclass

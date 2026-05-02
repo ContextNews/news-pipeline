@@ -1118,21 +1118,24 @@ def upload_enriched_entities(
 
     for entity in enriched:
         # 1. Upsert into kb_entities
+        image_url = entity.person.image_url if entity.person else None
         session.execute(
             text(
                 """
-                INSERT INTO kb_entities (qid, name, description, entity_type)
-                VALUES (:qid, :name, :description, :entity_type)
+                INSERT INTO kb_entities (qid, name, description, entity_type, image_url)
+                VALUES (:qid, :name, :description, :entity_type, :image_url)
                 ON CONFLICT (qid) DO UPDATE
                   SET name = EXCLUDED.name,
-                      description = EXCLUDED.description
+                      description = EXCLUDED.description,
+                      image_url = COALESCE(kb_entities.image_url, EXCLUDED.image_url)
                 """
             ),
             {
                 "qid": entity.qid,
-                "name": entity.name,
+                "name": entity.name.upper(),
                 "description": entity.description,
                 "entity_type": entity.entity_type,
+                "image_url": image_url,
             },
         )
 

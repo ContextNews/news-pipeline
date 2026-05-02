@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from urllib.parse import quote
 
 import requests
 
@@ -162,11 +163,19 @@ def classify_as_person(
     nationality_qids = _get_claim_qids(claims, "P27")
     nationalities = _resolve_country_codes(nationality_qids, delay) or None
 
+    # P18: image → build Wikimedia Commons Special:FilePath URL
+    image_filename = _get_claim_string(claims, "P18")
+    image_url = (
+        f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(image_filename, safe='')}"
+        if image_filename else None
+    )
+
     return KBPerson(
         qid=qid,
         name=_get_english_label(entity_data) or qid,
         description=entity_data.get("descriptions", {}).get("en", {}).get("value"),
         nationalities=nationalities,
+        image_url=image_url,
     )
 
 
