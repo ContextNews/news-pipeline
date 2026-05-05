@@ -692,7 +692,7 @@ def upload_stories(
                 story_period, created_at, updated_at
             )
             VALUES (
-                :id, :title, :summary, :key_points,
+                :id, :title, :summary, :key_points::text[],
                 :story_period, :created_at, :updated_at
             )
             """
@@ -825,16 +825,16 @@ def upload_stories(
 def load_entities_for_resolution(
     published_date: date,
     overwrite: bool,
-) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, list[str]]]:
     """
-    Load GPE and PERSON entities from RDS for entity resolution.
+    Load GPE, PERSON, and ORG entities from RDS for entity resolution.
 
     Args:
         published_date: Date to load articles for
         overwrite: If True, include articles that already have resolved entities
 
     Returns:
-        Tuple of (gpe_entities, person_entities) where each is
+        Tuple of (gpe_entities, person_entities, org_entities) where each is
         {article_id: [ENTITY_NAME, ...]} with uppercase names
     """
     from collections import defaultdict
@@ -845,7 +845,7 @@ def load_entities_for_resolution(
     start, end = date_to_range(published_date)
 
     logger.info(
-        "Loading GPE and PERSON entities for articles published from %s to %s",
+        "Loading GPE, PERSON, and ORG entities for articles published from %s to %s",
         start.isoformat(),
         end.isoformat(),
     )
@@ -860,7 +860,7 @@ def load_entities_for_resolution(
             JOIN articles a ON a.id = aem.article_id
             WHERE a.published_at >= :start
               AND a.published_at < :end
-              AND aem.ner_type IN ('GPE', 'PERSON')
+              AND aem.ner_type IN ('GPE', 'PERSON', 'ORG')
               AND (:overwrite OR NOT EXISTS (
                 SELECT 1 FROM article_entities_resolved aer
                 WHERE aer.article_id = aem.article_id
@@ -874,21 +874,27 @@ def load_entities_for_resolution(
 
     gpe_entities: dict[str, list[str]] = defaultdict(list)
     person_entities: dict[str, list[str]] = defaultdict(list)
+    org_entities: dict[str, list[str]] = defaultdict(list)
 
     for row in results:
         if row.ner_type == "GPE":
             gpe_entities[row.article_id].append(row.mention_text.upper())
         elif row.ner_type == "PERSON":
             person_entities[row.article_id].append(row.mention_text.upper())
+        elif row.ner_type == "ORG":
+            org_entities[row.article_id].append(row.mention_text.upper())
 
     logger.info(
-        "Loaded %d GPE entities from %d articles and %d PERSON entities from %d articles",
+        "Loaded %d GPE entities from %d articles, %d PERSON entities from %d articles, "
+        "and %d ORG entities from %d articles",
         sum(len(v) for v in gpe_entities.values()),
         len(gpe_entities),
         sum(len(v) for v in person_entities.values()),
         len(person_entities),
+        sum(len(v) for v in org_entities.values()),
+        len(org_entities),
     )
-    return dict(gpe_entities), dict(person_entities)
+    return dict(gpe_entities), dict(person_entities), dict(org_entities)
 
 
 def load_location_aliases(aliases: set[str]) -> dict[str, list]:
@@ -993,6 +999,46 @@ def load_person_aliases(aliases: set[str]) -> dict[str, list]:
 
     logger.info("Loaded %d person aliases", len(alias_to_persons))
     return dict(alias_to_persons)
+
+
+def load_organization_aliases(aliases: set[str]) -> dict[str, list]:
+    """
+    Load organisation aliases for the given alias strings from RDS.
+
+    Args:
+        aliases: Uppercase alias strings to look up.
+
+    Returns: {ALIAS_UPPER: [qid, ...]}
+    """
+    if not aliases:
+        return {}
+
+    from collections import defaultdict
+
+    from sqlalchemy import bindparam, text
+    from context_db.connection import get_session
+
+    logger.info("Loading organisation aliases from RDS (%d aliases)", len(aliases))
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                UPPER(kea.alias) as alias,
+                kea.qid
+            FROM kb_entity_aliases kea
+            JOIN kb_entities ke ON ke.qid = kea.qid
+            WHERE ke.entity_type = 'organization'
+              AND UPPER(kea.alias) IN :aliases
+            """
+        ).bindparams(bindparam("aliases", expanding=True))
+        results = session.execute(stmt, {"aliases": list(aliases)}).all()
+
+    alias_to_qids: dict[str, list[str]] = defaultdict(list)
+    for row in results:
+        alias_to_qids[row.alias].append(row.qid)
+
+    logger.info("Loaded %d organisation aliases", len(alias_to_qids))
+    return dict(alias_to_qids)
 
 
 def upload_resolved_locations(
@@ -1118,7 +1164,12 @@ def upload_enriched_entities(
 
     for entity in enriched:
         # 1. Upsert into kb_entities
-        image_url = entity.person.image_url if entity.person else None
+        if entity.person:
+            image_url = entity.person.image_url
+        elif entity.organization:
+            image_url = entity.organization.logo_url
+        else:
+            image_url = None
         session.execute(
             text(
                 """
@@ -1170,6 +1221,23 @@ def upload_enriched_entities(
                 {
                     "qid": entity.qid,
                     "nationalities": entity.person.nationalities,
+                },
+            )
+        elif entity.entity_type == "organization" and entity.organization:
+            session.execute(
+                text(
+                    """
+                    INSERT INTO kb_organizations (qid, org_type, country_code)
+                    VALUES (:qid, :org_type, :country_code)
+                    ON CONFLICT (qid) DO UPDATE
+                      SET org_type = EXCLUDED.org_type,
+                          country_code = EXCLUDED.country_code
+                    """
+                ),
+                {
+                    "qid": entity.qid,
+                    "org_type": entity.organization.org_type,
+                    "country_code": entity.organization.country_code,
                 },
             )
 
