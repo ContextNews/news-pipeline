@@ -27,6 +27,7 @@ output/
 service_tests/output/
 scripts/
 **/data/
+temp/
 
 # IDE
 .idea/

@@ -37,15 +37,28 @@ class KBPerson:
 
 
 @dataclass
+class KBOrganization:
+    """An organisation entity to be added to the knowledge base."""
+
+    qid: str
+    name: str
+    description: str | None
+    org_type: str             # 'company' | 'government' | 'ngo' | 'media' | 'political' | 'international' | 'other'
+    country_code: str | None  # ISO 3166-1 alpha-2
+    logo_url: str | None = None
+
+
+@dataclass
 class EnrichedEntity:
     """An entity enriched from Wikidata, ready to be written to the KB and linked to articles."""
 
-    entity_name: str         # original name from article_entity_mentions
-    entity_type: str         # 'location' | 'person'
+    entity_name: str              # original name from article_entity_mentions
+    entity_type: str              # 'location' | 'person' | 'organization'
     qid: str
-    name: str                # canonical Wikidata label
+    name: str                     # canonical Wikidata label
     description: str | None
     location: KBLocation | None
     person: KBPerson | None
-    aliases: list[str]       # strings to add to kb_entity_aliases
-    article_ids: list[str]   # articles to link in article_entities_resolved
+    organization: KBOrganization | None
+    aliases: list[str]            # strings to add to kb_entity_aliases
+    article_ids: list[str]        # articles to link in article_entities_resolved

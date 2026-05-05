@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from enrich_entities.enrich_entities import _disambiguate, _try_enrich, enrich_entities
 from enrich_entities.helpers import group_by_entity_name
-from enrich_entities.models import KBLocation, KBPerson, WikidataCandidate
+from enrich_entities.models import KBLocation, KBOrganization, KBPerson, WikidataCandidate
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +199,68 @@ class TestEnrichEntities:
         assert result == []
 
     def test_empty_input_returns_empty(self) -> None:
-        result = enrich_entities({}, {}, delay=0)
+        result = enrich_entities({}, {}, {}, delay=0)
+        assert result == []
+
+    @patch("enrich_entities.enrich_entities.search_entity")
+    @patch("enrich_entities.enrich_entities.fetch_wikidata_entity_data")
+    @patch("enrich_entities.enrich_entities.classify_as_organization")
+    @patch("enrich_entities.enrich_entities.get_english_aliases")
+    def test_enriches_organisation(
+        self,
+        mock_aliases,
+        mock_classify_org,
+        mock_fetch,
+        mock_search,
+    ) -> None:
+        mock_search.return_value = [
+            WikidataCandidate(qid="Q312", label="Apple Inc.", description="technology company")
+        ]
+        mock_fetch.return_value = {"claims": {}}
+        mock_classify_org.return_value = KBOrganization(
+            qid="Q312",
+            name="Apple Inc.",
+            description="American technology company",
+            org_type="company",
+            country_code="US",
+            logo_url=None,
+        )
+        mock_aliases.return_value = ["Apple Inc.", "Apple"]
+
+        result = enrich_entities(
+            unresolved_gpe={},
+            unresolved_persons={},
+            unresolved_orgs={"APPLE INC.": ["article1"]},
+            delay=0,
+        )
+
+        assert len(result) == 1
+        assert result[0].qid == "Q312"
+        assert result[0].entity_type == "organization"
+        assert result[0].organization is not None
+        assert result[0].organization.org_type == "company"
+        assert result[0].organization.country_code == "US"
+        assert result[0].location is None
+        assert result[0].person is None
+
+    @patch("enrich_entities.enrich_entities.search_entity")
+    @patch("enrich_entities.enrich_entities.fetch_wikidata_entity_data")
+    @patch("enrich_entities.enrich_entities.classify_as_organization")
+    def test_skips_org_when_classification_fails(
+        self, mock_classify_org, mock_fetch, mock_search
+    ) -> None:
+        mock_search.return_value = [
+            WikidataCandidate(qid="Q1", label="Something", description=None)
+        ]
+        mock_fetch.return_value = {"claims": {}}
+        mock_classify_org.return_value = None
+
+        result = enrich_entities(
+            unresolved_gpe={},
+            unresolved_persons={},
+            unresolved_orgs={"SOMETHING": ["article1"]},
+            delay=0,
+        )
         assert result == []
 
     @patch("enrich_entities.enrich_entities.search_entity")

@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 import requests
 
-from enrich_entities.models import KBLocation, KBPerson, WikidataCandidate
+from enrich_entities.models import KBLocation, KBOrganization, KBPerson, WikidataCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,44 @@ LOCATION_TYPE_MAP: dict[str, str] = {
 }
 
 HUMAN_QID = "Q5"
+
+# Maps Wikidata P31 (instance of) QIDs to our KB org_type values.
+# More specific types are listed first so the first match wins.
+ORG_TYPE_MAP: dict[str, str] = {
+    # company / business
+    "Q4830453": "company",    # business enterprise
+    "Q783794":  "company",    # company
+    "Q891723":  "company",    # public company
+    "Q9353":    "company",    # corporation
+    "Q6881511": "company",    # enterprise
+    "Q16831714": "company",   # private company
+    # government / state body
+    "Q7188":    "government",
+    "Q7187":    "government", # government agency
+    "Q327333":  "government", # government agency (alt)
+    "Q2659904": "government", # government organisation
+    # ngo / nonprofit
+    "Q163740":  "ngo",        # charitable organisation
+    "Q167037":  "ngo",        # charity
+    "Q15911314": "ngo",       # foundation
+    "Q708676":  "ngo",        # nonprofit organisation
+    # media
+    "Q1668024": "media",      # news agency
+    "Q11032":   "media",      # newspaper
+    "Q5398426": "media",      # television station
+    "Q2085381": "media",      # publisher
+    "Q1002697": "media",      # magazine
+    # political
+    "Q48204":   "political",  # political party
+    "Q7210356": "political",  # political organisation
+    # international / intergovernmental
+    "Q484652":  "international",  # international organisation
+    "Q7430525": "international",  # intergovernmental organisation
+    # other / catch-all
+    "Q31855":   "other",      # think tank
+    "Q837836":  "other",      # trade association
+    "Q43229":   "other",      # organisation (generic fallback)
+}
 
 
 def search_entity(name: str, delay: float = 0.5) -> list[WikidataCandidate]:
@@ -176,6 +214,48 @@ def classify_as_person(
         description=entity_data.get("descriptions", {}).get("en", {}).get("value"),
         nationalities=nationalities,
         image_url=image_url,
+    )
+
+
+def classify_as_organization(
+    qid: str,
+    entity_data: dict,
+    delay: float = 0.5,
+) -> KBOrganization | None:
+    """
+    Return a KBOrganization if the entity is a recognised organisation type, else None.
+
+    May make an additional API call to resolve the country code via P17.
+    """
+    claims = entity_data.get("claims", {})
+    instance_of_qids = _get_claim_qids(claims, "P31")
+
+    org_type: str | None = None
+    for instance_qid in instance_of_qids:
+        if instance_qid in ORG_TYPE_MAP:
+            org_type = ORG_TYPE_MAP[instance_qid]
+            break
+
+    if not org_type:
+        return None
+
+    country_qids = _get_claim_qids(claims, "P17")
+    country_code = _fetch_country_code(country_qids[0], delay) if country_qids else None
+
+    # P154: logo image → build Wikimedia Commons Special:FilePath URL
+    logo_filename = _get_claim_string(claims, "P154")
+    logo_url = (
+        f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(logo_filename, safe='')}"
+        if logo_filename else None
+    )
+
+    return KBOrganization(
+        qid=qid,
+        name=_get_english_label(entity_data) or qid,
+        description=entity_data.get("descriptions", {}).get("en", {}).get("value"),
+        org_type=org_type,
+        country_code=country_code,
+        logo_url=logo_url,
     )
 
 

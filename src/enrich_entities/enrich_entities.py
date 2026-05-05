@@ -7,6 +7,7 @@ import logging
 from enrich_entities.models import EnrichedEntity, WikidataCandidate
 from enrich_entities.wikidata import (
     classify_as_location,
+    classify_as_organization,
     classify_as_person,
     fetch_wikidata_entity_data,
     get_english_aliases,
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 def enrich_entities(
     unresolved_gpe: dict[str, list[str]],
     unresolved_persons: dict[str, list[str]],
+    unresolved_orgs: dict[str, list[str]] | None = None,
     delay: float = 0.5,
 ) -> list[EnrichedEntity]:
     """
@@ -27,6 +29,7 @@ def enrich_entities(
     Args:
         unresolved_gpe: {entity_name: [article_id, ...]} for GPE entities absent from KB
         unresolved_persons: {entity_name: [article_id, ...]} for PERSON entities absent from KB
+        unresolved_orgs: {entity_name: [article_id, ...]} for ORG entities absent from KB
         delay: Seconds to wait between Wikidata API calls
 
     Returns:
@@ -44,11 +47,17 @@ def enrich_entities(
         if entity:
             results.append(entity)
 
+    for name, article_ids in (unresolved_orgs or {}).items():
+        entity = _try_enrich(name, article_ids, entity_type="organization", delay=delay)
+        if entity:
+            results.append(entity)
+
     logger.info(
-        "Enriched %d entities from Wikidata (%d GPE, %d PERSON)",
+        "Enriched %d entities from Wikidata (%d location, %d person, %d organization)",
         len(results),
         sum(1 for e in results if e.entity_type == "location"),
         sum(1 for e in results if e.entity_type == "person"),
+        sum(1 for e in results if e.entity_type == "organization"),
     )
     return results
 
@@ -69,6 +78,10 @@ def _try_enrich(
         logger.debug("Could not fetch Wikidata data for QID %s (%s)", chosen.qid, name)
         return None
 
+    location = None
+    person = None
+    organization = None
+
     if entity_type == "location":
         location = classify_as_location(chosen.qid, entity_data, delay)
         if not location:
@@ -77,10 +90,9 @@ def _try_enrich(
                 name, chosen.qid, chosen.label,
             )
             return None
-        person = None
         canonical_name = location.name
         description = location.description
-    else:
+    elif entity_type == "person":
         person = classify_as_person(chosen.qid, entity_data, delay)
         if not person:
             logger.info(
@@ -88,9 +100,18 @@ def _try_enrich(
                 name, chosen.qid, chosen.label,
             )
             return None
-        location = None
         canonical_name = person.name
         description = person.description
+    else:
+        organization = classify_as_organization(chosen.qid, entity_data, delay)
+        if not organization:
+            logger.info(
+                "Skipping '%s' — [%s] %r is not a recognised organisation type",
+                name, chosen.qid, chosen.label,
+            )
+            return None
+        canonical_name = organization.name
+        description = organization.description
 
     aliases = get_english_aliases(entity_data)
     # Ensure the original entity name is included as an alias
@@ -106,6 +127,7 @@ def _try_enrich(
         description=description,
         location=location,
         person=person,
+        organization=organization,
         aliases=aliases,
         article_ids=list(dict.fromkeys(article_ids)),
     )

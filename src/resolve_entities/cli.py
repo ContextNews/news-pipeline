@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     args = parse_resolve_entities_args()
 
-    gpe_entities, person_entities = load_entities_for_resolution(
+    gpe_entities, person_entities, _ = load_entities_for_resolution(
         args.published_date, args.overwrite
     )
 

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from common.aws import load_entities_for_resolution, load_location_aliases, load_person_aliases
+from common.aws import load_entities_for_resolution, load_location_aliases, load_organization_aliases, load_person_aliases
 from enrich_entities.enrich_entities import enrich_entities
 from enrich_entities.helpers import group_by_entity_name
 
@@ -31,21 +31,22 @@ DATA_DIR = Path(__file__).parents[2] / "data"
 
 
 @pytest.fixture(scope="module")
-def unresolved_sample() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+def unresolved_sample() -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, list[str]]]:
     """
-    Load a small sample of unresolved GPE and PERSON entities from the real DB.
+    Load a small sample of unresolved GPE, PERSON, and ORG entities from the real DB.
 
     Tries the past 7 days in reverse order, using the first date that has data.
     Skips if the KB already covers everything found.
     """
     gpe_entities: dict = {}
     person_entities: dict = {}
+    org_entities: dict = {}
     found_date = None
 
     for days_ago in range(7):
         date = (datetime.now(timezone.utc) - timedelta(days=days_ago)).date()
-        gpe_entities, person_entities = load_entities_for_resolution(date, overwrite=False)
-        if gpe_entities or person_entities:
+        gpe_entities, person_entities, org_entities = load_entities_for_resolution(date, overwrite=False)
+        if gpe_entities or person_entities or org_entities:
             found_date = date
             break
 
@@ -53,28 +54,33 @@ def unresolved_sample() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
         pytest.skip("No entity data found in DB for the past 7 days")
 
     logger.info(
-        "Using date %s — found %d articles with GPE entities, %d with PERSON entities",
+        "Using date %s — found %d articles with GPE entities, %d with PERSON entities, %d with ORG entities",
         found_date,
         len(gpe_entities),
         len(person_entities),
+        len(org_entities),
     )
 
     gpe_by_name = group_by_entity_name(gpe_entities)
     person_by_name = group_by_entity_name(person_entities)
+    org_by_name = group_by_entity_name(org_entities)
 
     logger.info(
-        "%d distinct GPE names, %d distinct PERSON names",
+        "%d distinct GPE names, %d distinct PERSON names, %d distinct ORG names",
         len(gpe_by_name),
         len(person_by_name),
+        len(org_by_name),
     )
 
     existing_location_aliases = load_location_aliases(set(gpe_by_name.keys()))
     existing_person_aliases = load_person_aliases(set(person_by_name.keys()))
+    existing_org_aliases = load_organization_aliases(set(org_by_name.keys()))
 
     logger.info(
-        "%d GPE names already in KB, %d PERSON names already in KB",
+        "%d GPE names already in KB, %d PERSON names already in KB, %d ORG names already in KB",
         len(existing_location_aliases),
         len(existing_person_aliases),
+        len(existing_org_aliases),
     )
 
     unresolved_gpe = {
@@ -87,35 +93,44 @@ def unresolved_sample() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
         for name, ids in person_by_name.items()
         if name not in existing_person_aliases
     }
+    unresolved_orgs = {
+        name: ids
+        for name, ids in org_by_name.items()
+        if name not in existing_org_aliases
+    }
 
     logger.info(
-        "%d unresolved GPE names, %d unresolved PERSON names",
+        "%d unresolved GPE names, %d unresolved PERSON names, %d unresolved ORG names",
         len(unresolved_gpe),
         len(unresolved_persons),
+        len(unresolved_orgs),
     )
 
-    if not unresolved_gpe and not unresolved_persons:
+    if not unresolved_gpe and not unresolved_persons and not unresolved_orgs:
         pytest.skip("No unresolved entities found — KB already covers all entities for this date")
 
     sample_gpe = dict(list(unresolved_gpe.items())[:SAMPLE_SIZE])
     sample_persons = dict(list(unresolved_persons.items())[:SAMPLE_SIZE])
+    sample_orgs = dict(list(unresolved_orgs.items())[:SAMPLE_SIZE])
 
     logger.info(
-        "Sampled %d GPE and %d PERSON names for enrichment: GPE=%s PERSON=%s",
+        "Sampled %d GPE, %d PERSON, and %d ORG names for enrichment: GPE=%s PERSON=%s ORG=%s",
         len(sample_gpe),
         len(sample_persons),
+        len(sample_orgs),
         list(sample_gpe.keys()),
         list(sample_persons.keys()),
+        list(sample_orgs.keys()),
     )
 
-    return sample_gpe, sample_persons
+    return sample_gpe, sample_persons, sample_orgs
 
 
 @pytest.fixture(scope="module")
 def enriched_results(unresolved_sample):
     """Run enrichment once and save results to tests/data/."""
-    sample_gpe, sample_persons = unresolved_sample
-    results = enrich_entities(sample_gpe, sample_persons, delay=0.5)
+    sample_gpe, sample_persons, sample_orgs = unresolved_sample
+    results = enrich_entities(sample_gpe, sample_persons, sample_orgs, delay=0.5)
     logger.info("Wikidata returned %d enriched entities", len(results))
 
     DATA_DIR.mkdir(exist_ok=True)
@@ -146,7 +161,7 @@ def test_enriched_entities_have_valid_structure(enriched_results) -> None:
             len(entity.article_ids),
         )
         assert entity.qid, f"QID must be non-empty for entity '{entity.entity_name}'"
-        assert entity.entity_type in ("location", "person"), (
+        assert entity.entity_type in ("location", "person", "organization"), (
             f"Unexpected entity_type '{entity.entity_type}' for '{entity.entity_name}'"
         )
         assert entity.name, f"Canonical name must be non-empty for '{entity.entity_name}'"
@@ -159,9 +174,18 @@ def test_enriched_entities_have_valid_structure(enriched_results) -> None:
                 f"Unexpected location_type '{entity.location.location_type}'"
             )
             assert entity.person is None
-        else:
+            assert entity.organization is None
+        elif entity.entity_type == "person":
             assert entity.person is not None, f"person must be set for '{entity.entity_name}'"
             assert entity.location is None
+            assert entity.organization is None
+        else:
+            assert entity.organization is not None, f"organization must be set for '{entity.entity_name}'"
+            assert entity.organization.org_type in (
+                "company", "government", "ngo", "media", "political", "international", "other"
+            ), f"Unexpected org_type '{entity.organization.org_type}'"
+            assert entity.location is None
+            assert entity.person is None
 
 
 def test_original_entity_name_included_in_aliases(enriched_results) -> None:
@@ -176,10 +200,10 @@ def test_original_entity_name_included_in_aliases(enriched_results) -> None:
 
 def test_article_ids_are_subset_of_input(unresolved_sample, enriched_results) -> None:
     """Article IDs on enriched entities must come from the input data."""
-    sample_gpe, sample_persons = unresolved_sample
+    sample_gpe, sample_persons, sample_orgs = unresolved_sample
     all_input_article_ids = {
         article_id
-        for ids in list(sample_gpe.values()) + list(sample_persons.values())
+        for ids in list(sample_gpe.values()) + list(sample_persons.values()) + list(sample_orgs.values())
         for article_id in ids
     }
 
