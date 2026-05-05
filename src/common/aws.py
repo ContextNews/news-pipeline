@@ -692,7 +692,7 @@ def upload_stories(
                 story_period, created_at, updated_at
             )
             VALUES (
-                :id, :title, :summary, :key_points::text[],
+                :id, :title, :summary, CAST(:key_points AS text[]),
                 :story_period, :created_at, :updated_at
             )
             """
