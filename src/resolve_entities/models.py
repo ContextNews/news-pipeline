@@ -29,3 +29,10 @@ class ArticlePerson:
     article_id: str
     wikidata_qid: str
     name: str  # the PERSON entity name that matched
+
+
+@dataclass
+class ArticleOrganization:
+    article_id: str
+    wikidata_qid: str
+    name: str  # the ORG entity name that matched

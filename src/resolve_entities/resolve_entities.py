@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from resolve_entities.models import (
     ArticleLocation,
+    ArticleOrganization,
     ArticlePerson,
     LocationCandidate,
     PersonCandidate,
@@ -20,21 +21,26 @@ def resolve_entities(
     article_person_entities: dict[str, list[str]],
     alias_to_locations: dict[str, list[LocationCandidate]],
     alias_to_persons: dict[str, list[PersonCandidate]],
-) -> tuple[list[ArticleLocation], list[ArticlePerson]]:
+    article_org_entities: dict[str, list[str]] | None = None,
+    alias_to_organizations: dict[str, list[str]] | None = None,
+) -> tuple[list[ArticleLocation], list[ArticlePerson], list[ArticleOrganization]]:
     """
-    Resolve GPE and PERSON entities to their reference entries.
+    Resolve GPE, PERSON, and ORG entities to their reference entries.
 
     Resolves GPE entities first, then uses the resolved country codes
-    as context for person disambiguation.
+    as context for person disambiguation. ORG resolution is independent
+    and accepts only unambiguous (single-QID) aliases.
 
     Args:
         article_gpe_entities: {article_id: [GPE_NAME, ...]} (uppercase)
         article_person_entities: {article_id: [PERSON_NAME, ...]} (uppercase)
         alias_to_locations: {ALIAS: [LocationCandidate, ...]}
         alias_to_persons: {ALIAS: [PersonCandidate, ...]}
+        article_org_entities: {article_id: [ORG_NAME, ...]} (uppercase)
+        alias_to_organizations: {ALIAS: [qid, ...]}
 
     Returns:
-        Tuple of (resolved locations, resolved persons)
+        Tuple of (resolved locations, resolved persons, resolved organizations)
     """
     locations = _resolve_locations(article_gpe_entities, alias_to_locations)
 
@@ -45,12 +51,17 @@ def resolve_entities(
         article_person_entities, alias_to_persons, article_country_codes
     )
 
+    organizations = _resolve_organizations(
+        article_org_entities or {}, alias_to_organizations or {}
+    )
+
     logger.info(
-        "Resolved %d locations and %d persons",
+        "Resolved %d locations, %d persons, and %d organizations",
         len(locations),
         len(persons),
+        len(organizations),
     )
-    return locations, persons
+    return locations, persons, organizations
 
 
 # ---------------------------------------------------------------------------
@@ -212,3 +223,45 @@ def _disambiguate_person(
             candidates = nationality_matches
 
     return candidates
+
+
+# ---------------------------------------------------------------------------
+# Organization resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_organizations(
+    article_org_entities: dict[str, list[str]],
+    alias_to_organizations: dict[str, list[str]],
+) -> list[ArticleOrganization]:
+    """
+    Resolve ORG entities to organisations.
+
+    Conservative rule: accept only aliases that map to exactly one QID.
+    Ambiguous aliases (e.g. "Apple" the company vs the fruit) are skipped
+    to avoid polluting the KB link table.
+    """
+    results: list[ArticleOrganization] = []
+
+    for article_id, entity_names in article_org_entities.items():
+        for entity_name in entity_names:
+            candidates = alias_to_organizations.get(entity_name, [])
+            if not candidates:
+                logger.debug("No organisation alias found for ORG entity: %s", entity_name)
+                continue
+            if len(candidates) > 1:
+                logger.debug(
+                    "Skipping ambiguous ORG alias %s (%d candidates)",
+                    entity_name,
+                    len(candidates),
+                )
+                continue
+            results.append(
+                ArticleOrganization(
+                    article_id=article_id,
+                    wikidata_qid=candidates[0],
+                    name=entity_name,
+                )
+            )
+
+    return results

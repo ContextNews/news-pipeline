@@ -14,6 +14,7 @@ from generate_stories.helpers import parse_generate_stories_args
 from common.aws import (
     load_clusters,
     load_article_locations,
+    load_article_organizations,
     load_article_persons,
     load_article_topics,
     upload_stories,
@@ -43,6 +44,7 @@ def main() -> None:
     ]
     article_locations = load_article_locations(all_article_ids)
     article_persons = load_article_persons(all_article_ids)
+    article_organizations = load_article_organizations(all_article_ids)
     article_topics = load_article_topics(all_article_ids)
 
     now = datetime.now(timezone.utc)
@@ -51,6 +53,7 @@ def main() -> None:
         article_locations,
         article_persons,
         article_topics,
+        article_organizations=article_organizations,
         model=args.model,
         generated_at=now,
     )

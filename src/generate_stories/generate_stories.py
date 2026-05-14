@@ -9,7 +9,12 @@ from uuid import uuid4
 from cronkite import Cronkite, CronkiteConfig
 
 from generate_stories.classify_stories import classify_stories
-from generate_stories.resolve_story_entities import resolve_story_location, resolve_story_persons
+from generate_stories.rank_story_entities import rank_entities_by_appearance
+from generate_stories.resolve_story_entities import (
+    resolve_story_location,
+    resolve_story_organizations,
+    resolve_story_persons,
+)
 from generate_stories.topic_indicators import get_indicators_for_topics
 
 logger = logging.getLogger(__name__)
@@ -27,6 +32,7 @@ class GeneratedStoryOverview:
     location: dict[str, Any] | None
     location_qid: str | None = None
     person_qids: list[str] | None = None
+    organization_qids: list[str] | None = None
 
 
 def _normalize_articles_for_cronkite(
@@ -85,6 +91,7 @@ def generate_story(
     model: str = "gpt-4o-mini",
     article_locations: dict[str, list[str]] | None = None,
     article_persons: dict[str, list[str]] | None = None,
+    article_organizations: dict[str, list[str]] | None = None,
 ) -> GeneratedStoryOverview:
     """Generate a story overview from a single cluster of related articles."""
     story_overview = generate_story_overview(
@@ -102,8 +109,13 @@ def generate_story(
     if article_persons:
         person_qids = resolve_story_persons(article_ids, article_persons)
 
+    organization_qids = []
+    if article_organizations:
+        organization_qids = resolve_story_organizations(article_ids, article_organizations)
+
     story_overview.location_qid = location_qid
     story_overview.person_qids = person_qids
+    story_overview.organization_qids = organization_qids
     return story_overview
 
 
@@ -127,6 +139,7 @@ def build_story_record(
         "location": story.location,
         "location_qid": story.location_qid,
         "person_qids": story.person_qids or [],
+        "organization_qids": story.organization_qids or [],
         "noise_article_ids": story.noise_article_ids,
         "story_period": story_period.isoformat() if hasattr(story_period, "isoformat") else story_period,
         "generated_at": generated_at.isoformat(),
@@ -138,6 +151,7 @@ def process_clusters(
     article_locations: dict[str, list[str]],
     article_persons: dict[str, list[str]],
     article_topics: dict[str, list[str]],
+    article_organizations: dict[str, list[str]] | None = None,
     model: str = "gpt-4o-mini",
     generated_at: datetime | None = None,
 ) -> list[dict[str, Any]]:
@@ -174,6 +188,7 @@ def process_clusters(
                 model=model,
                 article_locations=article_locations,
                 article_persons=article_persons,
+                article_organizations=article_organizations,
             )
             article_ids = story.article_ids or [a["id"] for a in articles]
             record = build_story_record(
@@ -183,9 +198,9 @@ def process_clusters(
 
             logger.info("  Story: %s", story.title)
             logger.info(
-                "  %d kept, %d noise | location=%s | persons=%s",
+                "  %d kept, %d noise | location=%s | persons=%s | orgs=%s",
                 len(article_ids), len(story.noise_article_ids),
-                story.location_qid, story.person_qids,
+                story.location_qid, story.person_qids, story.organization_qids,
             )
         except Exception as e:
             logger.error("Failed to generate story for cluster %s: %s", cluster_id, e)
@@ -208,4 +223,44 @@ def process_clusters(
     for record in story_records:
         record["ts_indicators"] = get_indicators_for_topics(record["topics"])
 
+    # Rank entities by first appearance of their alias in title + summary.
+    # Done as a batch to amortise the alias lookup across all stories.
+    _attach_entity_ranks(story_records)
+
     return story_records
+
+
+def _attach_entity_ranks(story_records: list[dict[str, Any]]) -> None:
+    """Populate `entity_ranks` ({qid: rank}) on each story record.
+
+    Loads aliases for every QID referenced across all stories in one batch,
+    then ranks each story's entities by earliest appearance of any alias in
+    `title + " " + summary`. Entities that do not appear get no rank entry
+    and will be persisted with `is_key=False`.
+    """
+    from common.aws import load_aliases_for_qids
+
+    all_qids: set[str] = set()
+    for record in story_records:
+        if record.get("location_qid"):
+            all_qids.add(record["location_qid"])
+        all_qids.update(record.get("person_qids") or [])
+        all_qids.update(record.get("organization_qids") or [])
+
+    if not all_qids:
+        for record in story_records:
+            record["entity_ranks"] = {}
+        return
+
+    aliases_by_qid = load_aliases_for_qids(sorted(all_qids))
+
+    for record in story_records:
+        story_qids: list[str] = []
+        if record.get("location_qid"):
+            story_qids.append(record["location_qid"])
+        story_qids.extend(record.get("person_qids") or [])
+        story_qids.extend(record.get("organization_qids") or [])
+
+        story_aliases = {qid: aliases_by_qid.get(qid, []) for qid in story_qids}
+        text = f"{record.get('title', '')} {record.get('summary', '')}"
+        record["entity_ranks"] = rank_entities_by_appearance(text, story_aliases)

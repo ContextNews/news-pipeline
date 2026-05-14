@@ -12,8 +12,10 @@ from resolve_entities.helpers import parse_resolve_entities_args
 from common.aws import (
     load_entities_for_resolution,
     load_location_aliases,
+    load_organization_aliases,
     load_person_aliases,
     upload_resolved_locations,
+    upload_resolved_organizations,
     upload_resolved_persons,
     upload_jsonl_records_to_s3,
 )
@@ -29,29 +31,36 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     args = parse_resolve_entities_args()
 
-    gpe_entities, person_entities, _ = load_entities_for_resolution(
+    gpe_entities, person_entities, org_entities = load_entities_for_resolution(
         args.published_date, args.overwrite
     )
 
-    if not gpe_entities and not person_entities:
+    if not gpe_entities and not person_entities and not org_entities:
         logger.warning("No entities to resolve")
         return
 
     gpe_names = {name for names in gpe_entities.values() for name in names}
     person_names = {name for names in person_entities.values() for name in names}
+    org_names = {name for names in org_entities.values() for name in names}
 
     alias_to_locations = load_location_aliases(gpe_names)
     alias_to_persons = load_person_aliases(person_names)
+    alias_to_organizations = load_organization_aliases(org_names)
 
-    if not alias_to_locations and not alias_to_persons:
+    if not alias_to_locations and not alias_to_persons and not alias_to_organizations:
         logger.warning("No alias reference data found")
         return
 
-    locations, persons = resolve_entities(
-        gpe_entities, person_entities, alias_to_locations, alias_to_persons
+    locations, persons, organizations = resolve_entities(
+        gpe_entities,
+        person_entities,
+        alias_to_locations,
+        alias_to_persons,
+        article_org_entities=org_entities,
+        alias_to_organizations=alias_to_organizations,
     )
 
-    if not locations and not persons:
+    if not locations and not persons and not organizations:
         logger.warning("No entities resolved")
         return
 
@@ -69,12 +78,21 @@ def main() -> None:
         if args.load_local:
             save_jsonl_records_local(persons, "article_persons")
 
+    if organizations:
+        if args.load_s3:
+            upload_jsonl_records_to_s3(organizations, "article_organizations")
+
+        if args.load_local:
+            save_jsonl_records_local(organizations, "article_organizations")
+
     if args.load_rds:
         with get_session() as session:
             if locations:
                 upload_resolved_locations(locations, session, args.overwrite)
             if persons:
                 upload_resolved_persons(persons, session, args.overwrite)
+            if organizations:
+                upload_resolved_organizations(organizations, session, args.overwrite)
 
 
 if __name__ == "__main__":

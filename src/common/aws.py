@@ -573,6 +573,34 @@ def load_article_persons(article_ids: list[str]) -> dict[str, list[str]]:
     return article_persons
 
 
+def load_article_organizations(article_ids: list[str]) -> dict[str, list[str]]:
+    """Load organisations for articles. Returns {article_id: [qid, ...]}."""
+    from sqlalchemy import text
+    from context_db.connection import get_session
+
+    if not article_ids:
+        return {}
+
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT aer.article_id, aer.qid
+            FROM article_entities_resolved aer
+            JOIN kb_entities ke ON ke.qid = aer.qid
+            WHERE aer.article_id = ANY(:article_ids)
+              AND ke.entity_type = 'organization'
+            """
+        )
+        results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
+
+    article_orgs: dict[str, list[str]] = {}
+    for row in results:
+        article_orgs.setdefault(row["article_id"], []).append(row["qid"])
+
+    logger.info("Loaded organisations for %d articles", len(article_orgs))
+    return article_orgs
+
+
 def load_article_topics(article_ids: list[str]) -> dict[str, list[str]]:
     """Load topics for articles. Returns {article_id: [topic, ...]}."""
     from sqlalchemy import text
@@ -732,30 +760,47 @@ def upload_stories(
             article_story_rows,
         )
 
-    # Insert story_entities (locations and persons unified)
+    # Insert story_entities (locations, persons, organisations unified)
     story_entity_rows = []
+    location_count = 0
+    person_count = 0
+    org_count = 0
     for story in stories:
+        ranks = story.get("entity_ranks") or {}
+        candidate_qids: list[str] = []
         if story["location_qid"]:
-            story_entity_rows.append({"story_id": story["story_id"], "qid": story["location_qid"]})
-        for qid in story.get("person_qids", []):
-            story_entity_rows.append({"story_id": story["story_id"], "qid": qid})
+            candidate_qids.append(story["location_qid"])
+            location_count += 1
+        for qid in story.get("person_qids") or []:
+            candidate_qids.append(qid)
+            person_count += 1
+        for qid in story.get("organization_qids") or []:
+            candidate_qids.append(qid)
+            org_count += 1
+        for qid in candidate_qids:
+            rank = ranks.get(qid)
+            story_entity_rows.append({
+                "story_id": story["story_id"],
+                "qid": qid,
+                "is_key": rank is not None,
+                "rank": rank,
+            })
 
     if story_entity_rows:
         session.execute(
             text(
                 """
-                INSERT INTO story_entities (story_id, qid, score, role)
-                VALUES (:story_id, :qid, NULL, NULL)
+                INSERT INTO story_entities (story_id, qid, is_key, rank)
+                VALUES (:story_id, :qid, :is_key, :rank)
                 ON CONFLICT DO NOTHING
                 """
             ),
             story_entity_rows,
         )
-        location_count = sum(1 for s in stories if s["location_qid"])
-        person_count = len(story_entity_rows) - location_count
+        key_count = sum(1 for r in story_entity_rows if r["is_key"])
         logger.info(
-            "Saved %d story entity links (%d locations, %d persons) to RDS",
-            len(story_entity_rows), location_count, person_count,
+            "Saved %d story entity links (%d locations, %d persons, %d orgs; %d key) to RDS",
+            len(story_entity_rows), location_count, person_count, org_count, key_count,
         )
 
     # Insert story_topics (if stories have been classified)
@@ -1001,6 +1046,44 @@ def load_person_aliases(aliases: set[str]) -> dict[str, list]:
     return dict(alias_to_persons)
 
 
+def load_aliases_for_qids(qids: list[str]) -> dict[str, list[str]]:
+    """
+    Load all aliases (plus canonical name) for the given QIDs.
+
+    Returns {qid: [alias, alias, ..., canonical_name]}. Used by the story
+    entity ranker to detect which entities appear in the story title + summary.
+    """
+    if not qids:
+        return {}
+
+    from sqlalchemy import bindparam, text
+    from context_db.connection import get_session
+
+    aliases_by_qid: dict[str, list[str]] = {}
+    with get_session() as session:
+        name_stmt = text(
+            """
+            SELECT qid, name
+            FROM kb_entities
+            WHERE qid IN :qids
+            """
+        ).bindparams(bindparam("qids", expanding=True))
+        for row in session.execute(name_stmt, {"qids": list(qids)}).all():
+            aliases_by_qid.setdefault(row.qid, []).append(row.name)
+
+        alias_stmt = text(
+            """
+            SELECT qid, alias
+            FROM kb_entity_aliases
+            WHERE qid IN :qids
+            """
+        ).bindparams(bindparam("qids", expanding=True))
+        for row in session.execute(alias_stmt, {"qids": list(qids)}).all():
+            aliases_by_qid.setdefault(row.qid, []).append(row.alias)
+
+    return aliases_by_qid
+
+
 def load_organization_aliases(aliases: set[str]) -> dict[str, list]:
     """
     Load organisation aliases for the given alias strings from RDS.
@@ -1141,6 +1224,56 @@ def upload_resolved_persons(
     logger.info("Upserted %d article person entities into RDS", len(records))
 
 
+def upload_resolved_organizations(
+    organizations: list,
+    session: Any,
+    overwrite: bool = False,
+) -> None:
+    """
+    Upload resolved article organisations to RDS.
+
+    Args:
+        organizations: List of ArticleOrganization dataclass instances
+        session: SQLAlchemy session
+        overwrite: If True, delete existing organisations for these articles first
+    """
+    from sqlalchemy import text
+
+    if not organizations:
+        return
+
+    article_ids = sorted({o.article_id for o in organizations})
+
+    if overwrite:
+        session.execute(
+            text(
+                """
+                DELETE FROM article_entities_resolved
+                WHERE article_id = ANY(:article_ids)
+                  AND qid IN (SELECT qid FROM kb_entities WHERE entity_type = 'organization')
+                """
+            ),
+            {"article_ids": article_ids},
+        )
+
+    records = [
+        {"article_id": o.article_id, "qid": o.wikidata_qid}
+        for o in organizations
+    ]
+    session.execute(
+        text(
+            """
+            INSERT INTO article_entities_resolved (article_id, qid, score)
+            VALUES (:article_id, :qid, NULL)
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        records,
+    )
+    session.commit()
+    logger.info("Upserted %d article organisation entities into RDS", len(records))
+
+
 def upload_enriched_entities(
     enriched: list,
     session: Any,
@@ -1230,8 +1363,9 @@ def upload_enriched_entities(
                     INSERT INTO kb_organizations (qid, org_type, country_code)
                     VALUES (:qid, :org_type, :country_code)
                     ON CONFLICT (qid) DO UPDATE
-                      SET org_type = EXCLUDED.org_type,
-                          country_code = EXCLUDED.country_code
+                      SET org_type     = EXCLUDED.org_type,
+                          country_code = EXCLUDED.country_code,
+                          acronym      = COALESCE(kb_organizations.acronym, EXCLUDED.acronym)
                     """
                 ),
                 {

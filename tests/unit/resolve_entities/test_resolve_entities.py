@@ -13,6 +13,7 @@ from resolve_entities.resolve_entities import (
     _disambiguate_location,
     _disambiguate_person,
     _resolve_locations,
+    _resolve_organizations,
     _resolve_persons,
     resolve_entities,
 )
@@ -480,7 +481,7 @@ class TestResolveEntities:
                 )
             ]
         }
-        locations, persons = resolve_entities(
+        locations, persons, _ = resolve_entities(
             gpe_entities, person_entities, alias_to_locations, alias_to_persons
         )
         assert len(locations) == 1
@@ -517,13 +518,54 @@ class TestResolveEntities:
                 ),
             ]
         }
-        locations, persons = resolve_entities(
+        locations, persons, _ = resolve_entities(
             gpe_entities, person_entities, alias_to_locations, alias_to_persons
         )
         assert len(persons) == 1
         assert persons[0].wikidata_qid == "Q1"
 
     def test_empty_input_returns_empty_result(self) -> None:
-        locations, persons = resolve_entities({}, {}, {}, {})
+        locations, persons, organizations = resolve_entities({}, {}, {}, {})
         assert locations == []
         assert persons == []
+        assert organizations == []
+
+
+class TestResolveOrganizations:
+    def test_single_candidate_resolved(self) -> None:
+        results = _resolve_organizations(
+            {"article1": ["MICROSOFT"]},
+            {"MICROSOFT": ["Q2283"]},
+        )
+        assert len(results) == 1
+        assert results[0].wikidata_qid == "Q2283"
+        assert results[0].article_id == "article1"
+        assert results[0].name == "MICROSOFT"
+
+    def test_ambiguous_alias_skipped(self) -> None:
+        results = _resolve_organizations(
+            {"article1": ["APPLE"]},
+            {"APPLE": ["Q312", "Q89"]},
+        )
+        assert results == []
+
+    def test_unknown_alias_skipped(self) -> None:
+        results = _resolve_organizations(
+            {"article1": ["UNKNOWN ORG"]},
+            {"MICROSOFT": ["Q2283"]},
+        )
+        assert results == []
+
+    def test_resolve_entities_returns_organizations(self) -> None:
+        locations, persons, organizations = resolve_entities(
+            {},
+            {},
+            {},
+            {},
+            article_org_entities={"article1": ["MICROSOFT"]},
+            alias_to_organizations={"MICROSOFT": ["Q2283"]},
+        )
+        assert locations == []
+        assert persons == []
+        assert len(organizations) == 1
+        assert organizations[0].wikidata_qid == "Q2283"

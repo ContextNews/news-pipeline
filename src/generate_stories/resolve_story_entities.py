@@ -80,3 +80,34 @@ def resolve_story_persons(
     result = sorted(qids)
     logger.debug("Resolved %d persons for story", len(result))
     return result
+
+
+def resolve_story_organizations(
+    article_ids: list[str],
+    article_organizations: dict[str, list[str]],
+) -> list[str]:
+    """
+    Collect all distinct organisation QIDs from a story's articles.
+
+    Args:
+        article_ids: List of article IDs belonging to the story
+        article_organizations: Mapping of article_id -> list of wikidata_qids
+
+    Returns:
+        Sorted list of unique wikidata_qids, or empty list if none found.
+    """
+    if not article_ids:
+        return []
+
+    qids: set[str] = set()
+    for article_id in article_ids:
+        orgs = article_organizations.get(article_id, [])
+        qids.update(orgs)
+
+    if not qids:
+        logger.debug("No organisations found for %d articles", len(article_ids))
+        return []
+
+    result = sorted(qids)
+    logger.debug("Resolved %d organisations for story", len(result))
+    return result
