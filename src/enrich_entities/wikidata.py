@@ -242,8 +242,8 @@ def classify_as_organization(
     country_qids = _get_claim_qids(claims, "P17")
     country_code = _fetch_country_code(country_qids[0], delay) if country_qids else None
 
-    # P154: logo image → build Wikimedia Commons Special:FilePath URL
-    logo_filename = _get_claim_string(claims, "P154")
+    # P154 (logo) preferred; fall back to P18 (image) since most orgs lack P154
+    logo_filename = _get_claim_string(claims, "P154") or _get_claim_string(claims, "P18")
     logo_url = (
         f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(logo_filename, safe='')}"
         if logo_filename else None
