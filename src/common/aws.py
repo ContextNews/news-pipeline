@@ -604,13 +604,27 @@ def load_location_metadata(qids: list[str]) -> tuple[dict[str, str], dict[str, s
 
 
 def load_country_to_state_map() -> dict[str, str]:
-    """Return {iso_alpha_2: state_qid} for all seeded nation states."""
+    """
+    Return {country_code: state_qid} for all seeded nation states.
+
+    Keyed by ISO alpha-3 to match `kb_locations.country_code`, which uses
+    alpha-3 in practice (FRA, GBR, USA — confirmed by inspection). Alpha-2
+    entries are folded in as well for the small number of legacy rows that
+    use 2-letter codes.
+    """
     from sqlalchemy import text
     from context_db.connection import get_session
 
     with get_session() as session:
-        rows = session.execute(text("SELECT iso_alpha_2, qid FROM kb_states")).all()
-    return {row.iso_alpha_2: row.qid for row in rows}
+        rows = session.execute(
+            text("SELECT iso_alpha_2, iso_alpha_3, qid FROM kb_states")
+        ).all()
+    mapping: dict[str, str] = {}
+    for row in rows:
+        if row.iso_alpha_3:
+            mapping[row.iso_alpha_3] = row.qid
+        mapping[row.iso_alpha_2] = row.qid
+    return mapping
 
 
 def load_article_persons(article_ids: list[str]) -> dict[str, list[str]]:
