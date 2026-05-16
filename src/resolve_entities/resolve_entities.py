@@ -9,8 +9,10 @@ from resolve_entities.models import (
     ArticleLocation,
     ArticleOrganization,
     ArticlePerson,
+    ArticleState,
     LocationCandidate,
     PersonCandidate,
+    StateCandidate,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,13 +25,19 @@ def resolve_entities(
     alias_to_persons: dict[str, list[PersonCandidate]],
     article_org_entities: dict[str, list[str]] | None = None,
     alias_to_organizations: dict[str, list[str]] | None = None,
-) -> tuple[list[ArticleLocation], list[ArticlePerson], list[ArticleOrganization]]:
+    alias_to_states: dict[str, list[StateCandidate]] | None = None,
+) -> tuple[
+    list[ArticleLocation],
+    list[ArticleState],
+    list[ArticlePerson],
+    list[ArticleOrganization],
+]:
     """
     Resolve GPE, PERSON, and ORG entities to their reference entries.
 
-    Resolves GPE entities first, then uses the resolved country codes
-    as context for person disambiguation. ORG resolution is independent
-    and accepts only unambiguous (single-QID) aliases.
+    GPE entities are resolved against states first (preferred) and fall back
+    to locations. State and location ISO codes feed the country-code context
+    used to disambiguate persons.
 
     Args:
         article_gpe_entities: {article_id: [GPE_NAME, ...]} (uppercase)
@@ -38,14 +46,20 @@ def resolve_entities(
         alias_to_persons: {ALIAS: [PersonCandidate, ...]}
         article_org_entities: {article_id: [ORG_NAME, ...]} (uppercase)
         alias_to_organizations: {ALIAS: [qid, ...]}
+        alias_to_states: {ALIAS: [StateCandidate, ...]}
 
     Returns:
-        Tuple of (resolved locations, resolved persons, resolved organizations)
+        Tuple of (locations, states, persons, organizations)
     """
-    locations = _resolve_locations(article_gpe_entities, alias_to_locations)
+    alias_to_states = alias_to_states or {}
 
-    # Build per-article country codes from resolved locations
-    article_country_codes = _build_article_country_codes(locations, alias_to_locations)
+    states, locations = _resolve_gpe(
+        article_gpe_entities, alias_to_states, alias_to_locations
+    )
+
+    article_country_codes = _build_article_country_codes(
+        locations, states, alias_to_locations, alias_to_states
+    )
 
     persons = _resolve_persons(
         article_person_entities, alias_to_persons, article_country_codes
@@ -56,40 +70,70 @@ def resolve_entities(
     )
 
     logger.info(
-        "Resolved %d locations, %d persons, and %d organizations",
+        "Resolved %d locations, %d states, %d persons, and %d organizations",
         len(locations),
+        len(states),
         len(persons),
         len(organizations),
     )
-    return locations, persons, organizations
+    return locations, states, persons, organizations
 
 
 # ---------------------------------------------------------------------------
-# Location resolution (ported from resolve_article_locations)
+# GPE resolution (states preferred over locations)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_locations(
+def _resolve_gpe(
     article_gpe_entities: dict[str, list[str]],
+    alias_to_states: dict[str, list[StateCandidate]],
     alias_to_locations: dict[str, list[LocationCandidate]],
-) -> list[ArticleLocation]:
-    """Resolve GPE entities to locations using disambiguation heuristics."""
-    results: list[ArticleLocation] = []
+) -> tuple[list[ArticleState], list[ArticleLocation]]:
+    """Resolve each GPE entity to either a state (preferred) or a location."""
+    states: list[ArticleState] = []
+    locations: list[ArticleLocation] = []
 
     for article_id, entity_names in article_gpe_entities.items():
-        entity_candidates: dict[str, list[LocationCandidate]] = {}
+        location_candidates_by_name: dict[str, list[LocationCandidate]] = {}
+        resolved_states_in_article: list[StateCandidate] = []
         for name in entity_names:
+            state_candidates = alias_to_states.get(name)
+            if state_candidates:
+                # Prefer state. Ambiguous states are skipped (no fallback to location).
+                if len(state_candidates) == 1:
+                    chosen = state_candidates[0]
+                    states.append(
+                        ArticleState(
+                            article_id=article_id,
+                            wikidata_qid=chosen.wikidata_qid,
+                            name=name,
+                        )
+                    )
+                    resolved_states_in_article.append(chosen)
+                else:
+                    logger.debug(
+                        "Skipping ambiguous state alias %s (%d candidates) in article %s",
+                        name, len(state_candidates), article_id,
+                    )
+                continue
+
             if name in alias_to_locations:
-                entity_candidates[name] = alias_to_locations[name]
+                location_candidates_by_name[name] = alias_to_locations[name]
             else:
-                logger.debug("No location alias found for GPE entity: %s", name)
+                logger.debug("No state or location alias found for GPE entity: %s", name)
 
-        context = _build_location_context(entity_candidates)
+        # Build per-article context from unambiguous locations AND resolved states.
+        # State context replaces the country-name signal we used to get from
+        # location_type='country' rows before the country→state migration.
+        location_context = _build_location_context(location_candidates_by_name)
+        for state in resolved_states_in_article:
+            location_context.add(state.iso_alpha_2)
+            location_context.add(state.name.upper())
 
-        for entity_name, candidates in entity_candidates.items():
-            resolved = _disambiguate_location(candidates, context)
+        for entity_name, candidates in location_candidates_by_name.items():
+            resolved = _disambiguate_location(candidates, location_context)
             for location in resolved:
-                results.append(
+                locations.append(
                     ArticleLocation(
                         article_id=article_id,
                         wikidata_qid=location.wikidata_qid,
@@ -97,7 +141,7 @@ def _resolve_locations(
                     )
                 )
 
-    return results
+    return states, locations
 
 
 def _build_location_context(
@@ -152,20 +196,30 @@ def _disambiguate_location(
 
 def _build_article_country_codes(
     locations: list[ArticleLocation],
+    states: list[ArticleState],
     alias_to_locations: dict[str, list[LocationCandidate]],
+    alias_to_states: dict[str, list[StateCandidate]],
 ) -> dict[str, set[str]]:
     """
-    Build per-article country code sets from resolved locations.
+    Build per-article country code sets from resolved locations and states.
 
-    Uses the alias lookup to find the country_code for each resolved location.
+    Both location.country_code (for cities/regions) and state.iso_alpha_2
+    contribute to the context. State coverage is critical once country-shaped
+    kb_locations rows are cleaned up: country mentions only appear in
+    alias_to_states after that point.
     """
     article_country_codes: dict[str, set[str]] = defaultdict(set)
 
     for loc in locations:
-        candidates = alias_to_locations.get(loc.name, [])
-        for candidate in candidates:
+        for candidate in alias_to_locations.get(loc.name, []):
             if candidate.wikidata_qid == loc.wikidata_qid and candidate.country_code:
                 article_country_codes[loc.article_id].add(candidate.country_code)
+                break
+
+    for state in states:
+        for candidate in alias_to_states.get(state.name, []):
+            if candidate.wikidata_qid == state.wikidata_qid:
+                article_country_codes[state.article_id].add(candidate.iso_alpha_2)
                 break
 
     return dict(article_country_codes)

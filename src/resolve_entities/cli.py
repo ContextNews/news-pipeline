@@ -14,9 +14,11 @@ from common.aws import (
     load_location_aliases,
     load_organization_aliases,
     load_person_aliases,
+    load_state_aliases,
     upload_resolved_locations,
     upload_resolved_organizations,
     upload_resolved_persons,
+    upload_resolved_states,
     upload_jsonl_records_to_s3,
 )
 from common.cli_helpers import setup_logging
@@ -43,24 +45,31 @@ def main() -> None:
     person_names = {name for names in person_entities.values() for name in names}
     org_names = {name for names in org_entities.values() for name in names}
 
+    alias_to_states = load_state_aliases(gpe_names)
     alias_to_locations = load_location_aliases(gpe_names)
     alias_to_persons = load_person_aliases(person_names)
     alias_to_organizations = load_organization_aliases(org_names)
 
-    if not alias_to_locations and not alias_to_persons and not alias_to_organizations:
+    if (
+        not alias_to_states
+        and not alias_to_locations
+        and not alias_to_persons
+        and not alias_to_organizations
+    ):
         logger.warning("No alias reference data found")
         return
 
-    locations, persons, organizations = resolve_entities(
+    locations, states, persons, organizations = resolve_entities(
         gpe_entities,
         person_entities,
         alias_to_locations,
         alias_to_persons,
         article_org_entities=org_entities,
         alias_to_organizations=alias_to_organizations,
+        alias_to_states=alias_to_states,
     )
 
-    if not locations and not persons and not organizations:
+    if not locations and not states and not persons and not organizations:
         logger.warning("No entities resolved")
         return
 
@@ -70,6 +79,13 @@ def main() -> None:
 
         if args.load_local:
             save_jsonl_records_local(locations, "article_locations")
+
+    if states:
+        if args.load_s3:
+            upload_jsonl_records_to_s3(states, "article_states")
+
+        if args.load_local:
+            save_jsonl_records_local(states, "article_states")
 
     if persons:
         if args.load_s3:
@@ -89,6 +105,8 @@ def main() -> None:
         with get_session() as session:
             if locations:
                 upload_resolved_locations(locations, session, args.overwrite)
+            if states:
+                upload_resolved_states(states, session, args.overwrite)
             if persons:
                 upload_resolved_persons(persons, session, args.overwrite)
             if organizations:

@@ -12,14 +12,17 @@ from context_db.connection import get_session
 from generate_stories.generate_stories import process_clusters
 from generate_stories.helpers import parse_generate_stories_args
 from common.aws import (
-    load_clusters,
+    build_s3_key,
     load_article_locations,
     load_article_organizations,
     load_article_persons,
+    load_article_states,
     load_article_topics,
-    upload_stories,
+    load_clusters,
+    load_country_to_state_map,
+    load_location_metadata,
     upload_jsonl_to_s3,
-    build_s3_key,
+    upload_stories,
 )
 from common.cli_helpers import setup_logging, save_jsonl_local
 
@@ -45,7 +48,12 @@ def main() -> None:
     article_locations = load_article_locations(all_article_ids)
     article_persons = load_article_persons(all_article_ids)
     article_organizations = load_article_organizations(all_article_ids)
+    article_states = load_article_states(all_article_ids)
     article_topics = load_article_topics(all_article_ids)
+
+    all_location_qids = sorted({qid for qids in article_locations.values() for qid in qids})
+    location_types, location_country_codes = load_location_metadata(all_location_qids)
+    country_to_state = load_country_to_state_map()
 
     now = datetime.now(timezone.utc)
     stories = process_clusters(
@@ -54,6 +62,10 @@ def main() -> None:
         article_persons,
         article_topics,
         article_organizations=article_organizations,
+        article_states=article_states,
+        location_types=location_types,
+        location_country_codes=location_country_codes,
+        country_to_state=country_to_state,
         model=args.model,
         generated_at=now,
     )

@@ -545,6 +545,74 @@ def load_article_locations(article_ids: list[str]) -> dict[str, list[str]]:
     return article_locations
 
 
+def load_article_states(article_ids: list[str]) -> dict[str, list[str]]:
+    """Load states for articles. Returns {article_id: [qid, ...]}."""
+    from sqlalchemy import text
+    from context_db.connection import get_session
+
+    if not article_ids:
+        return {}
+
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT aer.article_id, aer.qid
+            FROM article_entities_resolved aer
+            JOIN kb_entities ke ON ke.qid = aer.qid
+            WHERE aer.article_id = ANY(:article_ids)
+              AND ke.entity_type = 'state'
+            """
+        )
+        results = session.execute(stmt, {"article_ids": article_ids}).mappings().all()
+
+    article_states: dict[str, list[str]] = {}
+    for row in results:
+        article_states.setdefault(row["article_id"], []).append(row["qid"])
+
+    logger.info("Loaded states for %d articles", len(article_states))
+    return article_states
+
+
+def load_location_metadata(qids: list[str]) -> tuple[dict[str, str], dict[str, str | None]]:
+    """
+    Load location_type and country_code for the given location QIDs.
+
+    Returns:
+        (qid_to_location_type, qid_to_country_code). Missing QIDs are omitted
+        from both maps; country_code may be None for valid rows (continents,
+        oceans, supranational regions).
+    """
+    from sqlalchemy import bindparam, text
+    from context_db.connection import get_session
+
+    if not qids:
+        return {}, {}
+
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT qid, location_type, country_code
+            FROM kb_locations
+            WHERE qid IN :qids
+            """
+        ).bindparams(bindparam("qids", expanding=True))
+        rows = session.execute(stmt, {"qids": list(qids)}).all()
+
+    types: dict[str, str] = {row.qid: row.location_type for row in rows}
+    country_codes: dict[str, str | None] = {row.qid: row.country_code for row in rows}
+    return types, country_codes
+
+
+def load_country_to_state_map() -> dict[str, str]:
+    """Return {iso_alpha_2: state_qid} for all seeded nation states."""
+    from sqlalchemy import text
+    from context_db.connection import get_session
+
+    with get_session() as session:
+        rows = session.execute(text("SELECT iso_alpha_2, qid FROM kb_states")).all()
+    return {row.iso_alpha_2: row.qid for row in rows}
+
+
 def load_article_persons(article_ids: list[str]) -> dict[str, list[str]]:
     """Load persons for articles. Returns {article_id: [qid, ...]}."""
     from sqlalchemy import text
@@ -760,24 +828,43 @@ def upload_stories(
             article_story_rows,
         )
 
-    # Insert story_entities (locations, persons, organisations unified)
+    # Insert story_entities (locations, states, persons, organisations unified).
+    # Ordering invariant: alias-mentioned QIDs (location/persons/orgs + alias states)
+    # get ranked; auto-attached states bypass the ranker and persist with
+    # is_key=False, rank=None. Deduped per-story to ensure an alias-mentioned
+    # state never gets overwritten by an auto-attach pass.
     story_entity_rows = []
     location_count = 0
     person_count = 0
     org_count = 0
+    state_count = 0
+    auto_state_count = 0
     for story in stories:
         ranks = story.get("entity_ranks") or {}
-        candidate_qids: list[str] = []
+        auto_states = set(story.get("auto_attached_state_qids") or [])
+
+        # Alias-matched QIDs (eligible for ranking)
+        ranked_qids: list[str] = []
         if story["location_qid"]:
-            candidate_qids.append(story["location_qid"])
+            ranked_qids.append(story["location_qid"])
             location_count += 1
         for qid in story.get("person_qids") or []:
-            candidate_qids.append(qid)
+            ranked_qids.append(qid)
             person_count += 1
         for qid in story.get("organization_qids") or []:
-            candidate_qids.append(qid)
+            ranked_qids.append(qid)
             org_count += 1
-        for qid in candidate_qids:
+        for qid in story.get("state_qids") or []:
+            if qid in auto_states:
+                continue
+            ranked_qids.append(qid)
+            state_count += 1
+
+        seen: set[str] = set()
+        for qid in ranked_qids:
+            if qid in seen:
+                continue
+            seen.add(qid)
             rank = ranks.get(qid)
             story_entity_rows.append({
                 "story_id": story["story_id"],
@@ -785,6 +872,19 @@ def upload_stories(
                 "is_key": rank is not None,
                 "rank": rank,
             })
+
+        # Auto-attached states: skip any QID already attached above.
+        for qid in sorted(auto_states):
+            if qid in seen:
+                continue
+            seen.add(qid)
+            story_entity_rows.append({
+                "story_id": story["story_id"],
+                "qid": qid,
+                "is_key": False,
+                "rank": None,
+            })
+            auto_state_count += 1
 
     if story_entity_rows:
         session.execute(
@@ -799,8 +899,10 @@ def upload_stories(
         )
         key_count = sum(1 for r in story_entity_rows if r["is_key"])
         logger.info(
-            "Saved %d story entity links (%d locations, %d persons, %d orgs; %d key) to RDS",
-            len(story_entity_rows), location_count, person_count, org_count, key_count,
+            "Saved %d story entity links (%d locations, %d persons, %d orgs, "
+            "%d states alias, %d states auto; %d key) to RDS",
+            len(story_entity_rows), location_count, person_count, org_count,
+            state_count, auto_state_count, key_count,
         )
 
     # Insert story_topics (if stories have been classified)
@@ -994,6 +1096,56 @@ def load_location_aliases(aliases: set[str]) -> dict[str, list]:
     return dict(alias_to_locations)
 
 
+def load_state_aliases(aliases: set[str]) -> dict[str, list]:
+    """
+    Load state aliases for the given alias strings from RDS.
+
+    Args:
+        aliases: Uppercase alias strings to look up.
+
+    Returns: {ALIAS_UPPER: [StateCandidate, ...]}
+    """
+    if not aliases:
+        return {}
+
+    from collections import defaultdict
+
+    from sqlalchemy import bindparam, text
+    from context_db.connection import get_session
+    from resolve_entities.models import StateCandidate
+
+    logger.info("Loading state aliases from RDS (%d aliases)", len(aliases))
+    with get_session() as session:
+        stmt = text(
+            """
+            SELECT
+                UPPER(kea.alias) as alias,
+                kea.qid,
+                ke.name,
+                ks.iso_alpha_2
+            FROM kb_entity_aliases kea
+            JOIN kb_entities ke ON ke.qid = kea.qid
+            JOIN kb_states ks ON ks.qid = kea.qid
+            WHERE ke.entity_type = 'state'
+              AND UPPER(kea.alias) IN :aliases
+            """
+        ).bindparams(bindparam("aliases", expanding=True))
+        results = session.execute(stmt, {"aliases": list(aliases)}).all()
+
+    alias_to_states: dict[str, list[StateCandidate]] = defaultdict(list)
+    for row in results:
+        alias_to_states[row.alias].append(
+            StateCandidate(
+                wikidata_qid=row.qid,
+                name=row.name,
+                iso_alpha_2=row.iso_alpha_2,
+            )
+        )
+
+    logger.info("Loaded %d state aliases", len(alias_to_states))
+    return dict(alias_to_states)
+
+
 def load_person_aliases(aliases: set[str]) -> dict[str, list]:
     """
     Load person aliases for the given alias strings from RDS.
@@ -1172,6 +1324,56 @@ def upload_resolved_locations(
     )
     session.commit()
     logger.info("Upserted %d article location entities into RDS", len(records))
+
+
+def upload_resolved_states(
+    states: list,
+    session: Any,
+    overwrite: bool = False,
+) -> None:
+    """
+    Upload resolved article states (nation states) to RDS.
+
+    Args:
+        states: List of ArticleState dataclass instances
+        session: SQLAlchemy session
+        overwrite: If True, delete existing state rows for these articles first
+    """
+    from sqlalchemy import text
+
+    if not states:
+        return
+
+    article_ids = sorted({s.article_id for s in states})
+
+    if overwrite:
+        session.execute(
+            text(
+                """
+                DELETE FROM article_entities_resolved
+                WHERE article_id = ANY(:article_ids)
+                  AND qid IN (SELECT qid FROM kb_entities WHERE entity_type = 'state')
+                """
+            ),
+            {"article_ids": article_ids},
+        )
+
+    records = [
+        {"article_id": s.article_id, "qid": s.wikidata_qid}
+        for s in states
+    ]
+    session.execute(
+        text(
+            """
+            INSERT INTO article_entities_resolved (article_id, qid, score)
+            VALUES (:article_id, :qid, NULL)
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        records,
+    )
+    session.commit()
+    logger.info("Upserted %d article state entities into RDS", len(records))
 
 
 def upload_resolved_persons(

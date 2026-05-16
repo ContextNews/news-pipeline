@@ -10,6 +10,13 @@ class LocationCandidate:
 
 
 @dataclass
+class StateCandidate:
+    wikidata_qid: str
+    name: str
+    iso_alpha_2: str
+
+
+@dataclass
 class PersonCandidate:
     wikidata_qid: str
     name: str
@@ -19,6 +26,13 @@ class PersonCandidate:
 
 @dataclass
 class ArticleLocation:
+    article_id: str
+    wikidata_qid: str
+    name: str  # the GPE entity name that matched
+
+
+@dataclass
+class ArticleState:
     article_id: str
     wikidata_qid: str
     name: str  # the GPE entity name that matched

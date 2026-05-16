@@ -5,18 +5,26 @@ from __future__ import annotations
 from resolve_entities.models import (
     ArticleLocation,
     ArticlePerson,
+    ArticleState,
     LocationCandidate,
     PersonCandidate,
+    StateCandidate,
 )
 from resolve_entities.resolve_entities import (
     _build_location_context,
     _disambiguate_location,
     _disambiguate_person,
-    _resolve_locations,
+    _resolve_gpe,
     _resolve_organizations,
     _resolve_persons,
     resolve_entities,
 )
+
+
+def _resolve_locations(article_entities, alias_to_locations):
+    """Backwards-compat shim: extract just the location list from _resolve_gpe."""
+    _states, locations = _resolve_gpe(article_entities, {}, alias_to_locations)
+    return locations
 
 
 # ---------------------------------------------------------------------------
@@ -481,7 +489,7 @@ class TestResolveEntities:
                 )
             ]
         }
-        locations, persons, _ = resolve_entities(
+        locations, _states, persons, _ = resolve_entities(
             gpe_entities, person_entities, alias_to_locations, alias_to_persons
         )
         assert len(locations) == 1
@@ -518,15 +526,16 @@ class TestResolveEntities:
                 ),
             ]
         }
-        locations, persons, _ = resolve_entities(
+        locations, _states, persons, _ = resolve_entities(
             gpe_entities, person_entities, alias_to_locations, alias_to_persons
         )
         assert len(persons) == 1
         assert persons[0].wikidata_qid == "Q1"
 
     def test_empty_input_returns_empty_result(self) -> None:
-        locations, persons, organizations = resolve_entities({}, {}, {}, {})
+        locations, states, persons, organizations = resolve_entities({}, {}, {}, {})
         assert locations == []
+        assert states == []
         assert persons == []
         assert organizations == []
 
@@ -557,7 +566,7 @@ class TestResolveOrganizations:
         assert results == []
 
     def test_resolve_entities_returns_organizations(self) -> None:
-        locations, persons, organizations = resolve_entities(
+        locations, states, persons, organizations = resolve_entities(
             {},
             {},
             {},
@@ -566,6 +575,7 @@ class TestResolveOrganizations:
             alias_to_organizations={"MICROSOFT": ["Q2283"]},
         )
         assert locations == []
+        assert states == []
         assert persons == []
         assert len(organizations) == 1
         assert organizations[0].wikidata_qid == "Q2283"

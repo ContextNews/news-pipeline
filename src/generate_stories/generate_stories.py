@@ -11,9 +11,11 @@ from cronkite import Cronkite, CronkiteConfig
 from generate_stories.classify_stories import classify_stories
 from generate_stories.rank_story_entities import rank_entities_by_appearance
 from generate_stories.resolve_story_entities import (
+    auto_attach_states,
     resolve_story_location,
     resolve_story_organizations,
     resolve_story_persons,
+    resolve_story_states,
 )
 from generate_stories.topic_indicators import get_indicators_for_topics
 
@@ -33,6 +35,10 @@ class GeneratedStoryOverview:
     location_qid: str | None = None
     person_qids: list[str] | None = None
     organization_qids: list[str] | None = None
+    state_qids: list[str] | None = None
+    # State QIDs derived from city→country lookup rather than article alias mentions.
+    # These bypass the §17 key-entity ranker and persist with is_key=False, rank=None.
+    auto_attached_state_qids: list[str] | None = None
 
 
 def _normalize_articles_for_cronkite(
@@ -92,6 +98,10 @@ def generate_story(
     article_locations: dict[str, list[str]] | None = None,
     article_persons: dict[str, list[str]] | None = None,
     article_organizations: dict[str, list[str]] | None = None,
+    article_states: dict[str, list[str]] | None = None,
+    location_types: dict[str, str] | None = None,
+    location_country_codes: dict[str, str | None] | None = None,
+    country_to_state: dict[str, str] | None = None,
 ) -> GeneratedStoryOverview:
     """Generate a story overview from a single cluster of related articles."""
     story_overview = generate_story_overview(
@@ -103,7 +113,9 @@ def generate_story(
 
     location_qid = None
     if article_locations:
-        location_qid = resolve_story_location(article_ids, article_locations)
+        location_qid = resolve_story_location(
+            article_ids, article_locations, location_types
+        )
 
     person_qids = []
     if article_persons:
@@ -113,9 +125,28 @@ def generate_story(
     if article_organizations:
         organization_qids = resolve_story_organizations(article_ids, article_organizations)
 
+    alias_state_qids: list[str] = []
+    if article_states:
+        alias_state_qids = resolve_story_states(article_ids, article_states)
+
+    # §3d: collect location QIDs from this story's articles, map each to its
+    # containing state, and add states the article didn't already mention.
+    auto_state_qids: list[str] = []
+    if article_locations and location_country_codes is not None and country_to_state:
+        story_location_qids: set[str] = set()
+        for article_id in article_ids:
+            story_location_qids.update(article_locations.get(article_id, []))
+        candidate_states = auto_attach_states(
+            sorted(story_location_qids), location_country_codes, country_to_state
+        )
+        existing = set(alias_state_qids)
+        auto_state_qids = [qid for qid in candidate_states if qid not in existing]
+
     story_overview.location_qid = location_qid
     story_overview.person_qids = person_qids
     story_overview.organization_qids = organization_qids
+    story_overview.state_qids = sorted(set(alias_state_qids) | set(auto_state_qids))
+    story_overview.auto_attached_state_qids = sorted(auto_state_qids)
     return story_overview
 
 
@@ -140,6 +171,8 @@ def build_story_record(
         "location_qid": story.location_qid,
         "person_qids": story.person_qids or [],
         "organization_qids": story.organization_qids or [],
+        "state_qids": story.state_qids or [],
+        "auto_attached_state_qids": story.auto_attached_state_qids or [],
         "noise_article_ids": story.noise_article_ids,
         "story_period": story_period.isoformat() if hasattr(story_period, "isoformat") else story_period,
         "generated_at": generated_at.isoformat(),
@@ -152,6 +185,10 @@ def process_clusters(
     article_persons: dict[str, list[str]],
     article_topics: dict[str, list[str]],
     article_organizations: dict[str, list[str]] | None = None,
+    article_states: dict[str, list[str]] | None = None,
+    location_types: dict[str, str] | None = None,
+    location_country_codes: dict[str, str | None] | None = None,
+    country_to_state: dict[str, str] | None = None,
     model: str = "gpt-4o-mini",
     generated_at: datetime | None = None,
 ) -> list[dict[str, Any]]:
@@ -163,6 +200,11 @@ def process_clusters(
         article_persons: Mapping of article_id to list of person QIDs.
         article_topics: Mapping of article_id to list of topic labels.
             Pass empty dict to skip classification.
+        article_organizations: Mapping of article_id to list of organisation QIDs.
+        article_states: Mapping of article_id to list of state QIDs (alias-resolved).
+        location_types: qid -> kb_locations.location_type for §3c most-specific-wins.
+        location_country_codes: qid -> kb_locations.country_code for §3d auto-attach.
+        country_to_state: iso_alpha_2 -> kb_states.qid for §3d auto-attach.
         model: OpenAI model to use for story generation.
         generated_at: Timestamp to record on each story. Defaults to now (UTC).
 
@@ -189,6 +231,10 @@ def process_clusters(
                 article_locations=article_locations,
                 article_persons=article_persons,
                 article_organizations=article_organizations,
+                article_states=article_states,
+                location_types=location_types,
+                location_country_codes=location_country_codes,
+                country_to_state=country_to_state,
             )
             article_ids = story.article_ids or [a["id"] for a in articles]
             record = build_story_record(
@@ -237,8 +283,16 @@ def _attach_entity_ranks(story_records: list[dict[str, Any]]) -> None:
     then ranks each story's entities by earliest appearance of any alias in
     `title + " " + summary`. Entities that do not appear get no rank entry
     and will be persisted with `is_key=False`.
+
+    Alias-mentioned state QIDs (state_qids minus auto_attached_state_qids) are
+    included in ranking; auto-attached states bypass this and persist with
+    is_key=False, rank=None.
     """
     from common.aws import load_aliases_for_qids
+
+    def alias_state_qids(record: dict[str, Any]) -> list[str]:
+        auto = set(record.get("auto_attached_state_qids") or [])
+        return [qid for qid in (record.get("state_qids") or []) if qid not in auto]
 
     all_qids: set[str] = set()
     for record in story_records:
@@ -246,6 +300,7 @@ def _attach_entity_ranks(story_records: list[dict[str, Any]]) -> None:
             all_qids.add(record["location_qid"])
         all_qids.update(record.get("person_qids") or [])
         all_qids.update(record.get("organization_qids") or [])
+        all_qids.update(alias_state_qids(record))
 
     if not all_qids:
         for record in story_records:
@@ -260,6 +315,7 @@ def _attach_entity_ranks(story_records: list[dict[str, Any]]) -> None:
             story_qids.append(record["location_qid"])
         story_qids.extend(record.get("person_qids") or [])
         story_qids.extend(record.get("organization_qids") or [])
+        story_qids.extend(alias_state_qids(record))
 
         story_aliases = {qid: aliases_by_qid.get(qid, []) for qid in story_qids}
         text = f"{record.get('title', '')} {record.get('summary', '')}"
