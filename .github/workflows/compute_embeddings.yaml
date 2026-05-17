@@ -125,6 +125,9 @@ jobs:
           path: .venv
           key: venv-compute-embeddings-${{ runner.os }}-${{ inputs.runner }}-${{ hashFiles('**/poetry.lock') }}
 
+      - name: Configure git auth for private context-db
+        run: git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
       - name: Install dependencies
         run: poetry install --no-interaction --with compute_embeddings
 
