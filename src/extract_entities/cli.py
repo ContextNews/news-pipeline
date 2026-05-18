@@ -9,7 +9,8 @@ from context_db.connection import get_session
 
 from extract_entities.extract_entities import extract_entities
 from extract_entities.helpers import parse_extract_entities_args
-from common.aws import load_articles_for_entities, upload_entities, upload_jsonl_records_to_s3
+from common.db_io import load_articles_for_entities, upload_entities
+from common.object_storage import upload_jsonl_records_to_object_store
 from common.cli_helpers import setup_logging
 from common.local_io import save_jsonl_records_local
 
@@ -38,13 +39,13 @@ def main() -> None:
         logger.warning("No entities extracted")
         return
 
-    if args.load_s3:
-        upload_jsonl_records_to_s3(entities, "article_entity_mentions")
+    if args.load_object_store:
+        upload_jsonl_records_to_object_store(entities, "article_entity_mentions")
 
     if args.load_local:
         save_jsonl_records_local(entities, "article_entity_mentions")
 
-    if args.load_rds:
+    if args.load_db:
         with get_session() as session:
             upload_entities(entities, session, args.overwrite)
 

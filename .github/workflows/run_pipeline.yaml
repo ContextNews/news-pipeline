@@ -28,8 +28,8 @@ jobs:
       # ingest
       ingest-lookback-hours: ${{ steps.parse.outputs.ingest-lookback-hours }}
       ingest-sources: ${{ steps.parse.outputs.ingest-sources }}
-      ingest-load-s3: ${{ steps.parse.outputs.ingest-load-s3 }}
-      ingest-load-rds: ${{ steps.parse.outputs.ingest-load-rds }}
+      ingest-load-object-store: ${{ steps.parse.outputs.ingest-load-object-store }}
+      ingest-load-db: ${{ steps.parse.outputs.ingest-load-db }}
       # embed
       embed-date: ${{ steps.parse.outputs.embed-date }}
       embed-model: ${{ steps.parse.outputs.embed-model }}
@@ -39,29 +39,29 @@ jobs:
       embed-no-summary: ${{ steps.parse.outputs.embed-no-summary }}
       embed-no-text: ${{ steps.parse.outputs.embed-no-text }}
       embed-overwrite: ${{ steps.parse.outputs.embed-overwrite }}
-      embed-load-s3: ${{ steps.parse.outputs.embed-load-s3 }}
-      embed-load-rds: ${{ steps.parse.outputs.embed-load-rds }}
+      embed-load-object-store: ${{ steps.parse.outputs.embed-load-object-store }}
+      embed-load-db: ${{ steps.parse.outputs.embed-load-db }}
       # entities
       entities-date: ${{ steps.parse.outputs.entities-date }}
       entities-model: ${{ steps.parse.outputs.entities-model }}
       entities-batch-size: ${{ steps.parse.outputs.entities-batch-size }}
       entities-word-limit: ${{ steps.parse.outputs.entities-word-limit }}
       entities-overwrite: ${{ steps.parse.outputs.entities-overwrite }}
-      entities-load-s3: ${{ steps.parse.outputs.entities-load-s3 }}
-      entities-load-rds: ${{ steps.parse.outputs.entities-load-rds }}
+      entities-load-object-store: ${{ steps.parse.outputs.entities-load-object-store }}
+      entities-load-db: ${{ steps.parse.outputs.entities-load-db }}
       # resolve
       resolve-date: ${{ steps.parse.outputs.resolve-date }}
       resolve-overwrite: ${{ steps.parse.outputs.resolve-overwrite }}
-      resolve-load-s3: ${{ steps.parse.outputs.resolve-load-s3 }}
-      resolve-load-rds: ${{ steps.parse.outputs.resolve-load-rds }}
+      resolve-load-object-store: ${{ steps.parse.outputs.resolve-load-object-store }}
+      resolve-load-db: ${{ steps.parse.outputs.resolve-load-db }}
       # cluster
       cluster-date: ${{ steps.parse.outputs.cluster-date }}
       cluster-embedding-model: ${{ steps.parse.outputs.cluster-embedding-model }}
       cluster-min-cluster-size: ${{ steps.parse.outputs.cluster-min-cluster-size }}
       cluster-min-samples: ${{ steps.parse.outputs.cluster-min-samples }}
       cluster-overwrite: ${{ steps.parse.outputs.cluster-overwrite }}
-      cluster-load-s3: ${{ steps.parse.outputs.cluster-load-s3 }}
-      cluster-load-rds: ${{ steps.parse.outputs.cluster-load-rds }}
+      cluster-load-object-store: ${{ steps.parse.outputs.cluster-load-object-store }}
+      cluster-load-db: ${{ steps.parse.outputs.cluster-load-db }}
       # classify
       classify-date: ${{ steps.parse.outputs.classify-date }}
       classify-model: ${{ steps.parse.outputs.classify-model }}
@@ -69,14 +69,14 @@ jobs:
       classify-threshold: ${{ steps.parse.outputs.classify-threshold }}
       classify-word-limit: ${{ steps.parse.outputs.classify-word-limit }}
       classify-overwrite: ${{ steps.parse.outputs.classify-overwrite }}
-      classify-load-s3: ${{ steps.parse.outputs.classify-load-s3 }}
-      classify-load-rds: ${{ steps.parse.outputs.classify-load-rds }}
+      classify-load-object-store: ${{ steps.parse.outputs.classify-load-object-store }}
+      classify-load-db: ${{ steps.parse.outputs.classify-load-db }}
       # stories
       stories-date: ${{ steps.parse.outputs.stories-date }}
       stories-model: ${{ steps.parse.outputs.stories-model }}
       stories-overwrite: ${{ steps.parse.outputs.stories-overwrite }}
-      stories-load-s3: ${{ steps.parse.outputs.stories-load-s3 }}
-      stories-load-rds: ${{ steps.parse.outputs.stories-load-rds }}
+      stories-load-object-store: ${{ steps.parse.outputs.stories-load-object-store }}
+      stories-load-db: ${{ steps.parse.outputs.stories-load-db }}
       # link_stories
       link-stories-model: ${{ steps.parse.outputs.link-stories-model }}
       link-stories-n-candidates: ${{ steps.parse.outputs.link-stories-n-candidates }}
@@ -100,8 +100,8 @@ jobs:
           # ingest
           echo "ingest-lookback-hours=$(val '.ingest.lookback_hours' '12')" >> "$GITHUB_OUTPUT"
           echo "ingest-sources=$(val '.ingest.sources' 'all')" >> "$GITHUB_OUTPUT"
-          echo "ingest-load-s3=$(val '.ingest.load_s3' 'true')" >> "$GITHUB_OUTPUT"
-          echo "ingest-load-rds=$(val '.ingest.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+          echo "ingest-load-object-store=$(val '.ingest.load_object_store' 'true')" >> "$GITHUB_OUTPUT"
+          echo "ingest-load-db=$(val '.ingest.load_db' 'true')" >> "$GITHUB_OUTPUT"
 
           # embed
           echo "embed-date=$(val '.embed.date' '')" >> "$GITHUB_OUTPUT"
@@ -112,8 +112,8 @@ jobs:
           echo "embed-no-summary=$(val '.embed.no_summary' 'false')" >> "$GITHUB_OUTPUT"
           echo "embed-no-text=$(val '.embed.no_text' 'false')" >> "$GITHUB_OUTPUT"
           echo "embed-overwrite=$(val '.embed.overwrite' 'true')" >> "$GITHUB_OUTPUT"
-          echo "embed-load-s3=$(val '.embed.load_s3' 'true')" >> "$GITHUB_OUTPUT"
-          echo "embed-load-rds=$(val '.embed.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+          echo "embed-load-object-store=$(val '.embed.load_object_store' 'true')" >> "$GITHUB_OUTPUT"
+          echo "embed-load-db=$(val '.embed.load_db' 'true')" >> "$GITHUB_OUTPUT"
 
           # entities
           echo "entities-date=$(val '.entities.date' '')" >> "$GITHUB_OUTPUT"
@@ -121,14 +121,14 @@ jobs:
           echo "entities-batch-size=$(val '.entities.batch_size' '32')" >> "$GITHUB_OUTPUT"
           echo "entities-word-limit=$(val '.entities.word_limit' '300')" >> "$GITHUB_OUTPUT"
           echo "entities-overwrite=$(val '.entities.overwrite' 'true')" >> "$GITHUB_OUTPUT"
-          echo "entities-load-s3=$(val '.entities.load_s3' 'true')" >> "$GITHUB_OUTPUT"
-          echo "entities-load-rds=$(val '.entities.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+          echo "entities-load-object-store=$(val '.entities.load_object_store' 'true')" >> "$GITHUB_OUTPUT"
+          echo "entities-load-db=$(val '.entities.load_db' 'true')" >> "$GITHUB_OUTPUT"
 
           # resolve
           echo "resolve-date=$(val '.resolve.date' '')" >> "$GITHUB_OUTPUT"
           echo "resolve-overwrite=$(val '.resolve.overwrite' 'true')" >> "$GITHUB_OUTPUT"
-          echo "resolve-load-s3=$(val '.resolve.load_s3' 'true')" >> "$GITHUB_OUTPUT"
-          echo "resolve-load-rds=$(val '.resolve.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+          echo "resolve-load-object-store=$(val '.resolve.load_object_store' 'true')" >> "$GITHUB_OUTPUT"
+          echo "resolve-load-db=$(val '.resolve.load_db' 'true')" >> "$GITHUB_OUTPUT"
 
           # cluster
           echo "cluster-date=$(val '.cluster.date' '')" >> "$GITHUB_OUTPUT"
@@ -136,8 +136,8 @@ jobs:
           echo "cluster-min-cluster-size=$(val '.cluster.min_cluster_size' '2')" >> "$GITHUB_OUTPUT"
           echo "cluster-min-samples=$(val '.cluster.min_samples' '0')" >> "$GITHUB_OUTPUT"
           echo "cluster-overwrite=$(val '.cluster.overwrite' 'true')" >> "$GITHUB_OUTPUT"
-          echo "cluster-load-s3=$(val '.cluster.load_s3' 'true')" >> "$GITHUB_OUTPUT"
-          echo "cluster-load-rds=$(val '.cluster.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+          echo "cluster-load-object-store=$(val '.cluster.load_object_store' 'true')" >> "$GITHUB_OUTPUT"
+          echo "cluster-load-db=$(val '.cluster.load_db' 'true')" >> "$GITHUB_OUTPUT"
 
           # classify
           echo "classify-date=$(val '.classify.date' '')" >> "$GITHUB_OUTPUT"
@@ -146,15 +146,15 @@ jobs:
           echo "classify-threshold=$(val '.classify.threshold' '0.5')" >> "$GITHUB_OUTPUT"
           echo "classify-word-limit=$(val '.classify.word_limit' '0')" >> "$GITHUB_OUTPUT"
           echo "classify-overwrite=$(val '.classify.overwrite' 'false')" >> "$GITHUB_OUTPUT"
-          echo "classify-load-s3=$(val '.classify.load_s3' 'true')" >> "$GITHUB_OUTPUT"
-          echo "classify-load-rds=$(val '.classify.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+          echo "classify-load-object-store=$(val '.classify.load_object_store' 'true')" >> "$GITHUB_OUTPUT"
+          echo "classify-load-db=$(val '.classify.load_db' 'true')" >> "$GITHUB_OUTPUT"
 
           # stories
           echo "stories-date=$(val '.stories.date' '')" >> "$GITHUB_OUTPUT"
           echo "stories-model=$(val '.stories.model' 'gpt-4o-mini')" >> "$GITHUB_OUTPUT"
           echo "stories-overwrite=$(val '.stories.overwrite' 'true')" >> "$GITHUB_OUTPUT"
-          echo "stories-load-s3=$(val '.stories.load_s3' 'true')" >> "$GITHUB_OUTPUT"
-          echo "stories-load-rds=$(val '.stories.load_rds' 'true')" >> "$GITHUB_OUTPUT"
+          echo "stories-load-object-store=$(val '.stories.load_object_store' 'true')" >> "$GITHUB_OUTPUT"
+          echo "stories-load-db=$(val '.stories.load_db' 'true')" >> "$GITHUB_OUTPUT"
 
           # link_stories
           echo "link-stories-model=$(val '.link_stories.model' 'gpt-4o-mini')" >> "$GITHUB_OUTPUT"
@@ -169,8 +169,8 @@ jobs:
       runner: ${{ inputs.runner }}
       lookback-hours: ${{ fromJSON(needs.load-config.outputs.ingest-lookback-hours) }}
       sources: ${{ needs.load-config.outputs.ingest-sources }}
-      load-s3: ${{ fromJSON(needs.load-config.outputs.ingest-load-s3) }}
-      load-rds: ${{ fromJSON(needs.load-config.outputs.ingest-load-rds) }}
+      load-object-store: ${{ fromJSON(needs.load-config.outputs.ingest-load-object-store) }}
+      load-db: ${{ fromJSON(needs.load-config.outputs.ingest-load-db) }}
 
   # Embed, extract-entities, and classify run in parallel after ingest
   embed:
@@ -187,8 +187,8 @@ jobs:
       no-summary: ${{ fromJSON(needs.load-config.outputs.embed-no-summary) }}
       no-text: ${{ fromJSON(needs.load-config.outputs.embed-no-text) }}
       overwrite: ${{ fromJSON(needs.load-config.outputs.embed-overwrite) }}
-      load-s3: ${{ fromJSON(needs.load-config.outputs.embed-load-s3) }}
-      load-rds: ${{ fromJSON(needs.load-config.outputs.embed-load-rds) }}
+      load-object-store: ${{ fromJSON(needs.load-config.outputs.embed-load-object-store) }}
+      load-db: ${{ fromJSON(needs.load-config.outputs.embed-load-db) }}
 
   extract-entities:
     needs: [ingest, load-config]
@@ -201,8 +201,8 @@ jobs:
       batch-size: ${{ fromJSON(needs.load-config.outputs.entities-batch-size) }}
       word-limit: ${{ fromJSON(needs.load-config.outputs.entities-word-limit) }}
       overwrite: ${{ fromJSON(needs.load-config.outputs.entities-overwrite) }}
-      load-s3: ${{ fromJSON(needs.load-config.outputs.entities-load-s3) }}
-      load-rds: ${{ fromJSON(needs.load-config.outputs.entities-load-rds) }}
+      load-object-store: ${{ fromJSON(needs.load-config.outputs.entities-load-object-store) }}
+      load-db: ${{ fromJSON(needs.load-config.outputs.entities-load-db) }}
 
   classify:
     needs: [ingest, load-config]
@@ -216,8 +216,8 @@ jobs:
       threshold: ${{ needs.load-config.outputs.classify-threshold }}
       word-limit: ${{ fromJSON(needs.load-config.outputs.classify-word-limit) }}
       overwrite: ${{ fromJSON(needs.load-config.outputs.classify-overwrite) }}
-      load-s3: ${{ fromJSON(needs.load-config.outputs.classify-load-s3) }}
-      load-rds: ${{ fromJSON(needs.load-config.outputs.classify-load-rds) }}
+      load-object-store: ${{ fromJSON(needs.load-config.outputs.classify-load-object-store) }}
+      load-db: ${{ fromJSON(needs.load-config.outputs.classify-load-db) }}
 
   # Resolve entities after entities are extracted
   resolve-entities:
@@ -228,8 +228,8 @@ jobs:
       runner: ${{ inputs.runner }}
       published-date: ${{ needs.load-config.outputs.resolve-date }}
       overwrite: ${{ fromJSON(needs.load-config.outputs.resolve-overwrite) }}
-      load-s3: ${{ fromJSON(needs.load-config.outputs.resolve-load-s3) }}
-      load-rds: ${{ fromJSON(needs.load-config.outputs.resolve-load-rds) }}
+      load-object-store: ${{ fromJSON(needs.load-config.outputs.resolve-load-object-store) }}
+      load-db: ${{ fromJSON(needs.load-config.outputs.resolve-load-db) }}
 
   # Cluster only needs embeddings
   cluster:
@@ -243,8 +243,8 @@ jobs:
       min-cluster-size: ${{ fromJSON(needs.load-config.outputs.cluster-min-cluster-size) }}
       min-samples: ${{ fromJSON(needs.load-config.outputs.cluster-min-samples) }}
       overwrite-clusters: ${{ fromJSON(needs.load-config.outputs.cluster-overwrite) }}
-      load-s3: ${{ fromJSON(needs.load-config.outputs.cluster-load-s3) }}
-      load-rds: ${{ fromJSON(needs.load-config.outputs.cluster-load-rds) }}
+      load-object-store: ${{ fromJSON(needs.load-config.outputs.cluster-load-object-store) }}
+      load-db: ${{ fromJSON(needs.load-config.outputs.cluster-load-db) }}
 
   # Generate stories after clustering, entity resolution, and article classification
   generate-stories:
@@ -256,8 +256,8 @@ jobs:
       cluster-period: ${{ needs.load-config.outputs.stories-date }}
       model: ${{ needs.load-config.outputs.stories-model }}
       overwrite: ${{ fromJSON(needs.load-config.outputs.stories-overwrite) }}
-      load-s3: ${{ fromJSON(needs.load-config.outputs.stories-load-s3) }}
-      load-rds: ${{ fromJSON(needs.load-config.outputs.stories-load-rds) }}
+      load-object-store: ${{ fromJSON(needs.load-config.outputs.stories-load-object-store) }}
+      load-db: ${{ fromJSON(needs.load-config.outputs.stories-load-db) }}
 
   # Link today's stories to related stories from the previous day
   link-stories:

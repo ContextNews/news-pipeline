@@ -9,7 +9,8 @@ from context_db.connection import get_session
 
 from cluster_articles.cluster_articles import cluster_articles
 from cluster_articles.helpers import parse_cluster_articles_args
-from common.aws import load_articles_with_embeddings, upload_clusters, upload_jsonl_records_to_s3
+from common.db_io import load_articles_with_embeddings, upload_clusters
+from common.object_storage import upload_jsonl_records_to_object_store
 from common.cli_helpers import setup_logging
 from common.local_io import save_jsonl_records_local
 
@@ -37,13 +38,13 @@ def main() -> None:
         logger.warning("No clusters produced")
         return
 
-    if args.load_s3:
-        upload_jsonl_records_to_s3(clustered, "clustered_articles")
+    if args.load_object_store:
+        upload_jsonl_records_to_object_store(clustered, "clustered_articles")
 
     if args.load_local:
         save_jsonl_records_local(clustered, "clustered_articles")
 
-    if args.load_rds:
+    if args.load_db:
         with get_session() as session:
             upload_clusters(clustered, session, args.ingested_date, args.overwrite)
 

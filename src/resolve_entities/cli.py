@@ -9,7 +9,7 @@ from context_db.connection import get_session
 
 from resolve_entities.resolve_entities import resolve_entities
 from resolve_entities.helpers import parse_resolve_entities_args
-from common.aws import (
+from common.db_io import (
     load_entities_for_resolution,
     load_location_aliases,
     load_organization_aliases,
@@ -19,8 +19,8 @@ from common.aws import (
     upload_resolved_organizations,
     upload_resolved_persons,
     upload_resolved_states,
-    upload_jsonl_records_to_s3,
 )
+from common.object_storage import upload_jsonl_records_to_object_store
 from common.cli_helpers import setup_logging
 from common.local_io import save_jsonl_records_local
 
@@ -74,34 +74,34 @@ def main() -> None:
         return
 
     if locations:
-        if args.load_s3:
-            upload_jsonl_records_to_s3(locations, "article_locations")
+        if args.load_object_store:
+            upload_jsonl_records_to_object_store(locations, "article_locations")
 
         if args.load_local:
             save_jsonl_records_local(locations, "article_locations")
 
     if states:
-        if args.load_s3:
-            upload_jsonl_records_to_s3(states, "article_states")
+        if args.load_object_store:
+            upload_jsonl_records_to_object_store(states, "article_states")
 
         if args.load_local:
             save_jsonl_records_local(states, "article_states")
 
     if persons:
-        if args.load_s3:
-            upload_jsonl_records_to_s3(persons, "article_persons")
+        if args.load_object_store:
+            upload_jsonl_records_to_object_store(persons, "article_persons")
 
         if args.load_local:
             save_jsonl_records_local(persons, "article_persons")
 
     if organizations:
-        if args.load_s3:
-            upload_jsonl_records_to_s3(organizations, "article_organizations")
+        if args.load_object_store:
+            upload_jsonl_records_to_object_store(organizations, "article_organizations")
 
         if args.load_local:
             save_jsonl_records_local(organizations, "article_organizations")
 
-    if args.load_rds:
+    if args.load_db:
         with get_session() as session:
             if locations:
                 upload_resolved_locations(locations, session, args.overwrite)

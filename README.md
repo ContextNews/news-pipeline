@@ -78,7 +78,7 @@ Inputs:
 - `published-date` (default: today UTC)
 - `overwrite` (default `false`)
 - `delay` — seconds between Wikidata API calls (default `0.5`)
-- `load-rds` (default `true`)
+- `load-db` (default `true`)
 
 #### Purge
 
@@ -97,7 +97,7 @@ Inputs:
 - Python `3.12`
 - Poetry
 - Access to the PostgreSQL database (`DATABASE_URL`)
-- AWS credentials + S3 bucket for S3 writes
+- Object-store credentials + bucket if using `--load-object-store` (currently S3-backed via boto3)
 - OpenAI key for story generation/linking (`OPENAI_API_KEY`)
 
 ### Install dependencies
@@ -110,32 +110,32 @@ If you only need a subset of stages, install only the relevant dependency groups
 
 ## Local CLI usage
 
-Most stages only persist outputs when `--load-s3`, `--load-rds`, or `--load-local` is provided.
+Most stages only persist outputs when `--load-object-store`, `--load-db`, or `--load-local` is provided.
 
 ```bash
 # Ingest
-poetry run python -m ingest_articles --lookback-hours 12 --sources all --load-s3 --load-rds
+poetry run python -m ingest_articles --lookback-hours 12 --sources all --load-object-store --load-db
 
 # Embeddings
-poetry run python -m compute_embeddings --published-date 2026-02-01 --model all-MiniLM-L6-v2 --batch-size 32 --load-s3 --load-rds
+poetry run python -m compute_embeddings --published-date 2026-02-01 --model all-MiniLM-L6-v2 --batch-size 32 --load-object-store --load-db
 
 # Extract entities
-poetry run python -m extract_entities --published-date 2026-02-01 --model en_core_web_trf --batch-size 32 --word-limit 300 --load-s3 --load-rds
+poetry run python -m extract_entities --published-date 2026-02-01 --model en_core_web_trf --batch-size 32 --word-limit 300 --load-object-store --load-db
 
 # Resolve entities
-poetry run python -m resolve_entities --published-date 2026-02-01 --load-s3 --load-rds
+poetry run python -m resolve_entities --published-date 2026-02-01 --load-object-store --load-db
 
 # Cluster
-poetry run python -m cluster_articles --ingested-date 2026-02-01 --embedding-model all-MiniLM-L6-v2 --min-cluster-size 2 --min-samples 0 --load-s3 --load-rds
+poetry run python -m cluster_articles --ingested-date 2026-02-01 --embedding-model all-MiniLM-L6-v2 --min-cluster-size 2 --min-samples 0 --load-object-store --load-db
 
 # Generate stories
-poetry run python -m generate_stories --cluster-period 2026-02-01 --model gpt-4o-mini --classify --link-stories --load-s3 --load-rds
+poetry run python -m generate_stories --cluster-period 2026-02-01 --model gpt-4o-mini --classify --link-stories --load-object-store --load-db
 
 # Standalone story linking (between arbitrary dates)
-poetry run python -m link_stories --date-a 2026-02-01 --date-b 2026-02-02 --n-candidates 3 --delete-existing --load-rds
+poetry run python -m link_stories --date-a 2026-02-01 --date-b 2026-02-02 --n-candidates 3 --delete-existing --load-db
 
 # Enrich knowledge base with Wikidata lookups for unresolved entities
-poetry run python -m enrich_entities --published-date 2026-02-01 --delay 0.5 --load-rds
+poetry run python -m enrich_entities --published-date 2026-02-01 --delay 0.5 --load-db
 
 # Purge intermediate data older than 30 days (use --dry-run to preview)
 poetry run python -m purge --retention-days 30 --dry-run
@@ -144,7 +144,7 @@ poetry run python -m purge --retention-days 30
 
 ## Stage outputs
 
-Primary RDS targets written by each stage:
+Primary DB targets written by each stage:
 
 - `ingest_articles`: `articles`
 - `compute_embeddings`: `article_embeddings`
@@ -156,7 +156,7 @@ Primary RDS targets written by each stage:
 - `generate_stories`: `stories`, `article_stories`, plus story metadata/link tables (for example `story_locations`, `story_persons`, `story_topics`, `story_stories`)
 - `link_stories`: `story_stories`
 
-S3 outputs use partitioned keys built as:
+Object-store outputs use partitioned keys built as:
 
 `{prefix}/year=YYYY/month=MM/day=DD/{filename}.jsonl`
 

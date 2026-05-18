@@ -4,8 +4,8 @@
 ingest:
   lookback_hours: 12
   sources: all
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 embed:
   date: ""
@@ -16,8 +16,8 @@ embed:
   no_summary: false
   no_text: false
   overwrite: false
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 entities:
   date: ""
@@ -25,14 +25,14 @@ entities:
   batch_size: 32
   word_limit: 300
   overwrite: false
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 resolve:
   date: ""
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 cluster:
   date: ""
@@ -40,8 +40,8 @@ cluster:
   min_cluster_size: 2
   min_samples: 0
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 classify:
   date: ""
@@ -50,15 +50,15 @@ classify:
   threshold: "0.5"
   word_limit: 0
   overwrite: false
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 stories:
   date: ""
   model: gpt-4o-mini
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 link_stories:
   model: gpt-4o-mini

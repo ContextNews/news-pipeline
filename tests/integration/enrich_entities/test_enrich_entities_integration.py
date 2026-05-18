@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from common.aws import load_entities_for_resolution, load_location_aliases, load_organization_aliases, load_person_aliases
+from common.db_io import load_entities_for_resolution, load_location_aliases, load_organization_aliases, load_person_aliases
 from enrich_entities.enrich_entities import enrich_entities
 from enrich_entities.helpers import group_by_entity_name
 

@@ -25,8 +25,8 @@ on:
         description: 'Seconds between Wikidata API calls'
         type: string
         default: '0.5'
-      load-rds:
-        description: 'Write new entities to KB and link to articles in RDS'
+      load-db:
+        description: 'Write new entities to KB and link to articles in DB'
         type: boolean
         default: true
 
@@ -78,8 +78,8 @@ jobs:
             ARGS="$ARGS --overwrite"
           fi
           ARGS="$ARGS --delay ${{ inputs.delay || '0.5' }}"
-          if [ "${{ inputs.load-rds }}" != "false" ]; then
-            ARGS="$ARGS --load-rds"
+          if [ "${{ inputs.load-db }}" != "false" ]; then
+            ARGS="$ARGS --load-db"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 

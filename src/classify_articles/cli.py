@@ -9,7 +9,8 @@ from context_db.connection import get_session
 
 from classify_articles.classify_articles import classify_articles
 from classify_articles.helpers import parse_classify_articles_args
-from common.aws import load_articles_for_classification, upload_article_topics, upload_jsonl_records_to_s3
+from common.db_io import load_articles_for_classification, upload_article_topics
+from common.object_storage import upload_jsonl_records_to_object_store
 from common.cli_helpers import setup_logging
 from common.local_io import save_jsonl_records_local
 
@@ -48,13 +49,13 @@ def main() -> None:
             result.topics,
         )
 
-    if args.load_s3:
-        upload_jsonl_records_to_s3(results, "classified_articles")
+    if args.load_object_store:
+        upload_jsonl_records_to_object_store(results, "classified_articles")
 
     if args.load_local:
         save_jsonl_records_local(results, "classified_articles")
 
-    if args.load_rds:
+    if args.load_db:
         with get_session() as session:
             upload_article_topics(results, session, args.overwrite)
 

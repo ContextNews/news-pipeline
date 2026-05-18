@@ -45,7 +45,7 @@ def parse_ingest_articles_args() -> argparse.Namespace:
         default=None,
         help="Comma-separated list of sources (default: all).",
     )
-    parser.add_argument("--load-s3", action="store_true")
-    parser.add_argument("--load-rds", action="store_true")
+    parser.add_argument("--load-object-store", action="store_true")
+    parser.add_argument("--load-db", action="store_true")
     parser.add_argument("--load-local", action="store_true")
     return parser.parse_args()

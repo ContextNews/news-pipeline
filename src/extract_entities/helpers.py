@@ -48,8 +48,8 @@ def parse_extract_entities_args() -> argparse.Namespace:
     )
 
     # Output options
-    parser.add_argument("--load-s3", action="store_true", help="Upload results to S3")
-    parser.add_argument("--load-rds", action="store_true", help="Load entities into RDS")
+    parser.add_argument("--load-object-store", action="store_true", help="Upload results to object store")
+    parser.add_argument("--load-db", action="store_true", help="Load entities into DB")
     parser.add_argument("--load-local", action="store_true", help="Save results to local file")
 
     return parser.parse_args()

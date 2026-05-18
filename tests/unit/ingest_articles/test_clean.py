@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from ingest_articles.clean_articles.clean import clean, clean_text
+from ingest_articles.clean_articles.clean import clean_articles, clean_text
 
 
 class TestCleanText:
@@ -43,7 +43,7 @@ class TestClean:
                 "text": "<p>Body</p>\n\nMore",
             }
         ]
-        result = clean(raw_articles)
+        result = clean_articles(raw_articles)
 
         assert len(result) == 1
         cleaned = result[0]
@@ -55,14 +55,14 @@ class TestClean:
 
     def test_skips_article_with_missing_id(self) -> None:
         raw_articles = [{"url": "https://example.com"}]
-        assert clean(raw_articles) == []
+        assert clean_articles(raw_articles) == []
 
     def test_skips_article_with_missing_url(self) -> None:
         raw_articles = [{"id": "abc"}]
-        assert clean(raw_articles) == []
+        assert clean_articles(raw_articles) == []
 
     def test_empty_input_returns_empty(self) -> None:
-        assert clean([]) == []
+        assert clean_articles([]) == []
 
     def test_none_input_returns_empty(self) -> None:
-        assert clean(None) == []
+        assert clean_articles(None) == []

@@ -18,10 +18,10 @@ on:
       min-samples:
         type: number
         default: 0
-      load-s3:
+      load-object-store:
         type: boolean
         default: true
-      load-rds:
+      load-db:
         type: boolean
         default: true
       overwrite-clusters:
@@ -37,7 +37,7 @@ on:
           - aws
         default: 'github'
       ingested-date:
-        description: 'UTC date to load from RDS (YYYY-MM-DD)'
+        description: 'UTC date to load from DB (YYYY-MM-DD)'
         type: string
         required: false
         default: ''
@@ -53,12 +53,12 @@ on:
         description: 'Minimum samples (leave empty for default)'
         type: number
         default: 0
-      load-s3:
-        description: 'Load to S3'
+      load-object-store:
+        description: 'Load to object store'
         type: boolean
         default: true
-      load-rds:
-        description: 'Load to RDS'
+      load-db:
+        description: 'Load to DB'
         type: boolean
         default: true
       overwrite-clusters:
@@ -77,7 +77,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        if: inputs.load-s3
+        if: inputs.load-object-store
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -123,11 +123,11 @@ jobs:
           if [ "${{ inputs.min-samples }}" -gt 0 ]; then
             ARGS="$ARGS --min-samples ${{ inputs.min-samples }}"
           fi
-          if [ "${{ inputs.load-s3 }}" = "true" ]; then
-            ARGS="$ARGS --load-s3"
+          if [ "${{ inputs.load-object-store }}" = "true" ]; then
+            ARGS="$ARGS --load-object-store"
           fi
-          if [ "${{ inputs.load-rds }}" = "true" ]; then
-            ARGS="$ARGS --load-rds"
+          if [ "${{ inputs.load-db }}" = "true" ]; then
+            ARGS="$ARGS --load-db"
           fi
           if [ "${{ inputs.overwrite-clusters }}" = "false" ]; then
             ARGS="$ARGS --no-overwrite"

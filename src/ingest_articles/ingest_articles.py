@@ -3,7 +3,7 @@
 import logging
 
 from ingest_articles.fetch_articles.fetch_articles import fetch_articles
-from ingest_articles.clean_articles.clean import clean
+from ingest_articles.clean_articles.clean import clean_articles
 from ingest_articles.models import CleanedArticle
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def ingest_articles(
         return []
 
     # Clean articles
-    cleaned = clean(raw_articles)
+    cleaned = clean_articles(raw_articles)
     if not cleaned:
         logger.warning("0 Articles cleaned")
         return []

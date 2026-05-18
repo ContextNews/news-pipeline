@@ -21,10 +21,10 @@ on:
       overwrite:
         type: boolean
         default: false
-      load-s3:
+      load-object-store:
         type: boolean
         default: true
-      load-rds:
+      load-db:
         type: boolean
         default: true
   workflow_dispatch:
@@ -57,12 +57,12 @@ on:
         description: 'Re-extract entities for articles with existing entities'
         type: boolean
         default: false
-      load-s3:
-        description: 'Load entities to S3'
+      load-object-store:
+        description: 'Load entities to object store'
         type: boolean
         default: true
-      load-rds:
-        description: 'Load entities to RDS'
+      load-db:
+        description: 'Load entities to DB'
         type: boolean
         default: true
 
@@ -77,7 +77,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        if: inputs.load-s3
+        if: inputs.load-object-store
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -150,11 +150,11 @@ jobs:
           if [ "${{ inputs.overwrite }}" = "true" ]; then
             ARGS="$ARGS --overwrite"
           fi
-          if [ "${{ inputs.load-s3 }}" = "true" ]; then
-            ARGS="$ARGS --load-s3"
+          if [ "${{ inputs.load-object-store }}" = "true" ]; then
+            ARGS="$ARGS --load-object-store"
           fi
-          if [ "${{ inputs.load-rds }}" = "true" ]; then
-            ARGS="$ARGS --load-rds"
+          if [ "${{ inputs.load-db }}" = "true" ]; then
+            ARGS="$ARGS --load-db"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 

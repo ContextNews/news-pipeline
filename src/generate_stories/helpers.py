@@ -32,8 +32,8 @@ def parse_generate_stories_args() -> argparse.Namespace:
         default=True,
         help="Overwrite existing stories for the cluster period (default: True)",
     )
-    parser.add_argument("--load-s3", action="store_true", help="Upload results to S3")
-    parser.add_argument("--load-rds", action="store_true", help="Save stories to RDS")
+    parser.add_argument("--load-object-store", action="store_true", help="Upload results to object store")
+    parser.add_argument("--load-db", action="store_true", help="Save stories to DB")
     parser.add_argument("--load-local", action="store_true", help="Save results to local file")
 
     return parser.parse_args()

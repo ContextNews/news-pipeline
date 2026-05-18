@@ -8,7 +8,7 @@ from context_db.connection import get_session
 
 from enrich_entities.enrich_entities import enrich_entities
 from enrich_entities.helpers import parse_enrich_entities_args, group_by_entity_name
-from common.aws import (
+from common.db_io import (
     load_entities_for_resolution,
     load_location_aliases,
     load_organization_aliases,
@@ -74,7 +74,7 @@ def main() -> None:
         logger.warning("No entities enriched from Wikidata")
         return
 
-    if args.load_rds:
+    if args.load_db:
         with get_session() as session:
             upload_enriched_entities(enriched, session, args.overwrite)
 

@@ -34,9 +34,9 @@ def parse_enrich_entities_args() -> argparse.Namespace:
 
     # Output options
     parser.add_argument(
-        "--load-rds",
+        "--load-db",
         action="store_true",
-        help="Write new entities to KB and link to articles in RDS",
+        help="Write new entities to KB and link to articles in DB",
     )
     parser.add_argument(
         "--load-local",

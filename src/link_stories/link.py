@@ -160,7 +160,7 @@ def save_story_links(
         ),
         rows,
     )
-    logger.info("Saved %d story edges to RDS", len(rows))
+    logger.info("Saved %d story edges to DB", len(rows))
 
 
 def delete_story_links(date_a: date, date_b: date, session: Any) -> int:

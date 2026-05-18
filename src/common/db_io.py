@@ -1,11 +1,7 @@
-import gzip
-import json
 import logging
-import os
 from datetime import date, datetime, timezone
-from typing import Iterable, Iterator, Mapping, Any
+from typing import Any
 
-import boto3
 from dotenv import load_dotenv
 
 from common.cli_helpers import date_to_range
@@ -14,111 +10,9 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-
-def get_s3_client():
-    """Create S3 client."""
-    return boto3.client("s3")
-
-
-def build_s3_key(prefix: str, timestamp: datetime, filename: str) -> str:
-    """Build a partitioned S3 key path."""
-    return (
-        f"{prefix}/"
-        f"year={timestamp.year:04d}/"
-        f"month={timestamp.month:02d}/"
-        f"day={timestamp.day:02d}/"
-        f"{filename}"
-    )
-
-
-def upload_jsonl_to_s3(
-    records: Iterable[Mapping[str, Any]],
-    bucket: str,
-    key: str,
-) -> None:
-    """Upload in-memory records to S3 as JSONL."""
-    body = "\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n"
-
-    s3 = get_s3_client()
-    s3.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=body.encode("utf-8"),
-        ContentType="application/jsonl",
-    )
-
-
-def upload_jsonl_records_to_s3(records: list[Any], prefix: str) -> None:
-    """
-    Upload a list of dataclass records to S3 as JSONL.
-
-    Handles serialization, builds the S3 key, and logs the result.
-
-    Args:
-        records: List of dataclass objects to upload
-        prefix: S3 prefix (e.g., "ingested_articles", "embedded_articles")
-    """
-    import logging
-    from datetime import timezone
-    from common.serialization import serialize_dataclass
-
-    logger = logging.getLogger(__name__)
-
-    bucket = os.environ["S3_BUCKET_NAME"]
-    now = datetime.now(timezone.utc)
-    filename = f"{prefix}_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl"
-    key = build_s3_key(prefix, now, filename)
-
-    serialized = [serialize_dataclass(record) for record in records]
-    upload_jsonl_to_s3(serialized, bucket, key)
-
-    logger.info("Uploaded %d records to s3://%s/%s", len(records), bucket, key)
-
-
-def upload_csv_to_s3(csv_content: str, bucket: str, key: str) -> None:
-    """Upload CSV string to S3."""
-    s3 = get_s3_client()
-    s3.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=csv_content.encode("utf-8"),
-        ContentType="text/csv",
-    )
-
-
-def list_s3_jsonl_files(bucket: str, prefix: str) -> list[str]:
-    """List all .jsonl files under an S3 prefix."""
-    s3 = get_s3_client()
-    files = []
-    paginator = s3.get_paginator("list_objects_v2")
-
-    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith(".jsonl") or key.endswith(".jsonl.gz"):
-                files.append(key)
-
-    return files
-
-
-def read_jsonl_from_s3(bucket: str, key: str) -> Iterator[dict]:
-    """Read JSONL file from S3, handling gzip if needed."""
-    s3 = get_s3_client()
-    response = s3.get_object(Bucket=bucket, Key=key)
-    content = response["Body"].read()
-
-    if key.endswith(".gz"):
-        content = gzip.decompress(content)
-
-    for line in content.decode("utf-8").splitlines():
-        line = line.strip()
-        if line:
-            yield json.loads(line)
-
-
 def upload_articles(articles: list[Any], session: Any) -> None:
     """
-    Upload articles to RDS PostgreSQL.
+    Upload articles to DB PostgreSQL.
 
     Handles insertion with duplicate detection and logs the result.
 
@@ -173,7 +67,7 @@ def upload_articles(articles: list[Any], session: Any) -> None:
             skipped += 1
 
     session.commit()
-    logger.info("Loaded %d articles to RDS (%d skipped as duplicates)", inserted, skipped)
+    logger.info("Loaded %d articles to DB (%d skipped as duplicates)", inserted, skipped)
 
 
 def load_ingested_articles(
@@ -182,7 +76,7 @@ def load_ingested_articles(
     overwrite: bool,
 ) -> list[dict]:
     """
-    Load articles from RDS for a specific published date (UTC).
+    Load articles from DB for a specific published date (UTC).
 
     Args:
         published_date: Date to load articles for
@@ -228,13 +122,13 @@ def load_ingested_articles(
         ).mappings().all()
         articles = [dict(row) for row in results]
 
-    logger.info("Loaded %d articles from RDS", len(articles))
+    logger.info("Loaded %d articles from DB", len(articles))
     return articles
 
 
 def upload_embeddings(embeddings: list[Any], session: Any) -> None:
     """
-    Upload article embeddings to RDS PostgreSQL.
+    Upload article embeddings to DB PostgreSQL.
 
     Handles upsert (update existing or insert new) and logs the result.
 
@@ -281,12 +175,12 @@ def upload_embeddings(embeddings: list[Any], session: Any) -> None:
         inserted += 1
 
     session.commit()
-    logger.info("Upserted %d embeddings to RDS (%d updated, %d inserted)", updated + inserted, updated, inserted)
+    logger.info("Upserted %d embeddings to DB (%d updated, %d inserted)", updated + inserted, updated, inserted)
 
 
 def load_articles_for_entities(published_date: date, overwrite: bool) -> list[dict]:
     """
-    Load articles from RDS for entity extraction.
+    Load articles from DB for entity extraction.
 
     Args:
         published_date: Date to load articles for
@@ -326,7 +220,7 @@ def load_articles_for_entities(published_date: date, overwrite: bool) -> list[di
         ).mappings().all()
         articles = [dict(row) for row in results]
 
-    logger.info("Loaded %d articles from RDS", len(articles))
+    logger.info("Loaded %d articles from DB", len(articles))
     return articles
 
 
@@ -335,7 +229,7 @@ def load_articles_with_embeddings(
     embedding_model: str,
 ) -> list[dict]:
     """
-    Load articles with embeddings from RDS for a specific ingested date (UTC).
+    Load articles with embeddings from DB for a specific ingested date (UTC).
 
     Args:
         ingested_date: Date to load articles for
@@ -384,7 +278,7 @@ def load_articles_with_embeddings(
 
 def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) -> None:
     """
-    Upload article entity mentions to RDS PostgreSQL.
+    Upload article entity mentions to DB PostgreSQL.
 
     Handles deletion of existing mentions (if overwrite) and insertion of
     article entity mention records into article_entity_mentions.
@@ -436,11 +330,11 @@ def upload_entities(entities: list[Any], session: Any, overwrite: bool = False) 
         )
 
     session.commit()
-    logger.info("Upserted %d article entity mentions into RDS", len(rows))
+    logger.info("Upserted %d article entity mentions into DB", len(rows))
 
 
 def load_clusters(cluster_period: date) -> list[dict[str, Any]]:
-    """Load article clusters and their articles from RDS for a specific cluster period (UTC)."""
+    """Load article clusters and their articles from DB for a specific cluster period (UTC)."""
     from sqlalchemy import text
     from context_db.connection import get_session
 
@@ -716,7 +610,7 @@ def upload_stories(
     overwrite: bool = True,
 ) -> None:
     """
-    Upload generated stories to RDS PostgreSQL.
+    Upload generated stories to DB PostgreSQL.
 
     Handles deletion of existing stories (if overwrite) and insertion of new stories
     with their article links and location references.
@@ -914,7 +808,7 @@ def upload_stories(
         key_count = sum(1 for r in story_entity_rows if r["is_key"])
         logger.info(
             "Saved %d story entity links (%d locations, %d persons, %d orgs, "
-            "%d states alias, %d states auto; %d key) to RDS",
+            "%d states alias, %d states auto; %d key) to DB",
             len(story_entity_rows), location_count, person_count, org_count,
             state_count, auto_state_count, key_count,
         )
@@ -939,7 +833,7 @@ def upload_stories(
             ),
             topic_rows,
         )
-        logger.info("Saved %d topic classifications to RDS", len(topic_rows))
+        logger.info("Saved %d topic classifications to DB", len(topic_rows))
 
     # Insert story_indicators (only for indicators that exist in ts_indicators)
     all_indicator_ids = {
@@ -977,10 +871,10 @@ def upload_stories(
             ),
             indicator_rows,
         )
-        logger.info("Saved %d story indicator links to RDS", len(indicator_rows))
+        logger.info("Saved %d story indicator links to DB", len(indicator_rows))
 
     session.commit()
-    logger.info("Saved %d stories to RDS", len(stories))
+    logger.info("Saved %d stories to DB", len(stories))
 
 
 def load_entities_for_resolution(
@@ -988,7 +882,7 @@ def load_entities_for_resolution(
     overwrite: bool,
 ) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, list[str]]]:
     """
-    Load GPE, PERSON, and ORG entities from RDS for entity resolution.
+    Load GPE, PERSON, and ORG entities from DB for entity resolution.
 
     Args:
         published_date: Date to load articles for
@@ -1060,7 +954,7 @@ def load_entities_for_resolution(
 
 def load_location_aliases(aliases: set[str]) -> dict[str, list]:
     """
-    Load location aliases for the given alias strings from RDS.
+    Load location aliases for the given alias strings from DB.
 
     Args:
         aliases: Uppercase alias strings to look up.
@@ -1076,7 +970,7 @@ def load_location_aliases(aliases: set[str]) -> dict[str, list]:
     from context_db.connection import get_session
     from resolve_entities.models import LocationCandidate
 
-    logger.info("Loading location aliases from RDS (%d aliases)", len(aliases))
+    logger.info("Loading location aliases from DB (%d aliases)", len(aliases))
     with get_session() as session:
         stmt = text(
             """
@@ -1112,7 +1006,7 @@ def load_location_aliases(aliases: set[str]) -> dict[str, list]:
 
 def load_state_aliases(aliases: set[str]) -> dict[str, list]:
     """
-    Load state aliases for the given alias strings from RDS.
+    Load state aliases for the given alias strings from DB.
 
     Args:
         aliases: Uppercase alias strings to look up.
@@ -1128,7 +1022,7 @@ def load_state_aliases(aliases: set[str]) -> dict[str, list]:
     from context_db.connection import get_session
     from resolve_entities.models import StateCandidate
 
-    logger.info("Loading state aliases from RDS (%d aliases)", len(aliases))
+    logger.info("Loading state aliases from DB (%d aliases)", len(aliases))
     with get_session() as session:
         stmt = text(
             """
@@ -1162,7 +1056,7 @@ def load_state_aliases(aliases: set[str]) -> dict[str, list]:
 
 def load_person_aliases(aliases: set[str]) -> dict[str, list]:
     """
-    Load person aliases for the given alias strings from RDS.
+    Load person aliases for the given alias strings from DB.
 
     Args:
         aliases: Uppercase alias strings to look up.
@@ -1178,7 +1072,7 @@ def load_person_aliases(aliases: set[str]) -> dict[str, list]:
     from context_db.connection import get_session
     from resolve_entities.models import PersonCandidate
 
-    logger.info("Loading person aliases from RDS (%d aliases)", len(aliases))
+    logger.info("Loading person aliases from DB (%d aliases)", len(aliases))
     with get_session() as session:
         stmt = text(
             """
@@ -1252,7 +1146,7 @@ def load_aliases_for_qids(qids: list[str]) -> dict[str, list[str]]:
 
 def load_organization_aliases(aliases: set[str]) -> dict[str, list]:
     """
-    Load organisation aliases for the given alias strings from RDS.
+    Load organisation aliases for the given alias strings from DB.
 
     Args:
         aliases: Uppercase alias strings to look up.
@@ -1267,7 +1161,7 @@ def load_organization_aliases(aliases: set[str]) -> dict[str, list]:
     from sqlalchemy import bindparam, text
     from context_db.connection import get_session
 
-    logger.info("Loading organisation aliases from RDS (%d aliases)", len(aliases))
+    logger.info("Loading organisation aliases from DB (%d aliases)", len(aliases))
     with get_session() as session:
         stmt = text(
             """
@@ -1296,7 +1190,7 @@ def upload_resolved_locations(
     overwrite: bool = False,
 ) -> None:
     """
-    Upload resolved article locations to RDS.
+    Upload resolved article locations to DB.
 
     Args:
         locations: List of ArticleLocation dataclass instances
@@ -1337,7 +1231,7 @@ def upload_resolved_locations(
         records,
     )
     session.commit()
-    logger.info("Upserted %d article location entities into RDS", len(records))
+    logger.info("Upserted %d article location entities into DB", len(records))
 
 
 def upload_resolved_states(
@@ -1346,7 +1240,7 @@ def upload_resolved_states(
     overwrite: bool = False,
 ) -> None:
     """
-    Upload resolved article states (nation states) to RDS.
+    Upload resolved article states (nation states) to DB.
 
     Args:
         states: List of ArticleState dataclass instances
@@ -1387,7 +1281,7 @@ def upload_resolved_states(
         records,
     )
     session.commit()
-    logger.info("Upserted %d article state entities into RDS", len(records))
+    logger.info("Upserted %d article state entities into DB", len(records))
 
 
 def upload_resolved_persons(
@@ -1396,7 +1290,7 @@ def upload_resolved_persons(
     overwrite: bool = False,
 ) -> None:
     """
-    Upload resolved article persons to RDS.
+    Upload resolved article persons to DB.
 
     Args:
         persons: List of ArticlePerson dataclass instances
@@ -1437,7 +1331,7 @@ def upload_resolved_persons(
         records,
     )
     session.commit()
-    logger.info("Upserted %d article person entities into RDS", len(records))
+    logger.info("Upserted %d article person entities into DB", len(records))
 
 
 def upload_resolved_organizations(
@@ -1446,7 +1340,7 @@ def upload_resolved_organizations(
     overwrite: bool = False,
 ) -> None:
     """
-    Upload resolved article organisations to RDS.
+    Upload resolved article organisations to DB.
 
     Args:
         organizations: List of ArticleOrganization dataclass instances
@@ -1487,7 +1381,7 @@ def upload_resolved_organizations(
         records,
     )
     session.commit()
-    logger.info("Upserted %d article organisation entities into RDS", len(records))
+    logger.info("Upserted %d article organisation entities into DB", len(records))
 
 
 def upload_enriched_entities(
@@ -1637,7 +1531,7 @@ def upload_enriched_entities(
         )
 
     session.commit()
-    logger.info("Uploaded %d enriched entities to RDS", len(enriched))
+    logger.info("Uploaded %d enriched entities to DB", len(enriched))
 
 
 def load_articles_for_classification(
@@ -1645,7 +1539,7 @@ def load_articles_for_classification(
     overwrite: bool,
 ) -> list[dict]:
     """
-    Load articles from RDS for a specific published date (UTC).
+    Load articles from DB for a specific published date (UTC).
 
     Args:
         published_date: Date to load articles for
@@ -1680,7 +1574,7 @@ def load_articles_for_classification(
         ).mappings().all()
         articles = [dict(row) for row in results]
 
-    logger.info("Loaded %d articles from RDS", len(articles))
+    logger.info("Loaded %d articles from DB", len(articles))
     return articles
 
 
@@ -1690,7 +1584,7 @@ def upload_article_topics(
     overwrite: bool = False,
 ) -> None:
     """
-    Upload article topic classifications to RDS PostgreSQL.
+    Upload article topic classifications to DB PostgreSQL.
 
     Ensures topic labels exist in the topics table, then inserts article_topics
     records. Deletes existing records first if overwrite=True.
@@ -1742,7 +1636,7 @@ def upload_article_topics(
 
     session.commit()
     logger.info(
-        "Uploaded topics for %d articles (%d topic assignments) to RDS",
+        "Uploaded topics for %d articles (%d topic assignments) to DB",
         len(article_ids),
         len(rows),
     )
@@ -1755,7 +1649,7 @@ def upload_clusters(
     overwrite: bool = True,
 ) -> None:
     """
-    Upload article clusters to RDS PostgreSQL.
+    Upload article clusters to DB PostgreSQL.
 
     Groups articles by cluster_id, creates cluster records, and links articles
     to clusters. Noise articles (cluster_id == -1) are ignored.
@@ -1841,4 +1735,4 @@ def upload_clusters(
         )
 
     session.commit()
-    logger.info("Saved %d clusters to RDS", len(clusters))
+    logger.info("Saved %d clusters to DB", len(clusters))

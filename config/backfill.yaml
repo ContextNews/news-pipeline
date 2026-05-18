@@ -1,11 +1,11 @@
-# Backfill config — re-process a specific date, write to RDS only.
+# Backfill config — re-process a specific date, write to DB only.
 # Adjust the date fields below before triggering.
 
 ingest:
   lookback_hours: 24
   sources: all
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 embed:
   date: "2026-02-01"
@@ -16,8 +16,8 @@ embed:
   no_summary: false
   no_text: false
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 entities:
   date: "2026-02-01"
@@ -25,14 +25,14 @@ entities:
   batch_size: 64
   word_limit: 300
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 resolve:
   date: "2026-02-01"
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 cluster:
   date: "2026-02-01"
@@ -40,8 +40,8 @@ cluster:
   min_cluster_size: 2
   min_samples: 0
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 classify:
   date: "2026-02-01"
@@ -50,15 +50,15 @@ classify:
   threshold: "0.5"
   word_limit: 0
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 stories:
   date: "2026-02-01"
   model: gpt-4o-mini
   overwrite: true
-  load_s3: false
-  load_rds: true
+  load_object_store: false
+  load_db: true
 
 link_stories:
   model: gpt-4o-mini

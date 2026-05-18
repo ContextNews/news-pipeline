@@ -9,7 +9,8 @@ from context_db.connection import get_session
 
 from compute_embeddings.compute_embeddings import compute_embeddings
 from compute_embeddings.helpers import parse_compute_embeddings_args
-from common.aws import load_ingested_articles, upload_embeddings, upload_jsonl_records_to_s3
+from common.db_io import load_ingested_articles, upload_embeddings
+from common.object_storage import upload_jsonl_records_to_object_store
 from common.cli_helpers import setup_logging
 from common.local_io import save_jsonl_records_local
 
@@ -42,13 +43,13 @@ def main() -> None:
         logger.warning("No articles embedded")
         return
 
-    if args.load_s3:
-        upload_jsonl_records_to_s3(embedded_articles, "embedded_articles")
+    if args.load_object_store:
+        upload_jsonl_records_to_object_store(embedded_articles, "embedded_articles")
 
     if args.load_local:
         save_jsonl_records_local(embedded_articles, "embedded_articles")
 
-    if args.load_rds:
+    if args.load_db:
         with get_session() as session:
             upload_embeddings(embedded_articles, session)
 

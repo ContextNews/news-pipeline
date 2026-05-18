@@ -28,8 +28,8 @@ def main() -> None:
     if args.date_b < args.date_a:
         raise ValueError("date-b must be on or after date-a")
 
-    if not args.load_rds:
-        logger.warning("link_stories requires --load-rds to save or delete links")
+    if not args.load_db:
+        logger.warning("link_stories requires --load-db to save or delete links")
         return
 
     date_a_stories = load_stories_for_date(args.date_a)

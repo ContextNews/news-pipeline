@@ -1,4 +1,4 @@
-"""CLI for pruning old intermediate pipeline data from RDS."""
+"""CLI for pruning old intermediate pipeline data from DB."""
 
 from __future__ import annotations
 

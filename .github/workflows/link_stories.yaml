@@ -101,7 +101,7 @@ jobs:
           ARGS="--date-a $DATE_A --date-b $DATE_B"
           ARGS="$ARGS --model ${{ inputs.model }}"
           ARGS="$ARGS --n-candidates ${{ inputs.n-candidates }}"
-          ARGS="$ARGS --load-rds"
+          ARGS="$ARGS --load-db"
           if [ "${{ inputs.delete-existing }}" = "true" ]; then
             ARGS="$ARGS --delete-existing"
           fi

@@ -45,6 +45,6 @@ def parse_link_stories_args() -> argparse.Namespace:
     )
 
     # Output options
-    parser.add_argument("--load-rds", action="store_true", help="Persist links to RDS")
+    parser.add_argument("--load-db", action="store_true", help="Persist links to DB")
 
     return parser.parse_args()

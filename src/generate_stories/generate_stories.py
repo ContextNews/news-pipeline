@@ -288,7 +288,7 @@ def _attach_entity_ranks(story_records: list[dict[str, Any]]) -> None:
     included in ranking; auto-attached states bypass this and persist with
     is_key=False, rank=None.
     """
-    from common.aws import load_aliases_for_qids
+    from common.db_io import load_aliases_for_qids
 
     def alias_state_qids(record: dict[str, Any]) -> list[str]:
         auto = set(record.get("auto_attached_state_qids") or [])

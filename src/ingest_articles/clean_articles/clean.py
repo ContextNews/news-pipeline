@@ -24,7 +24,7 @@ def clean_text(text: Optional[str]) -> Optional[str]:
     return text if text else None
 
 
-def clean(raw_articles: list[Any]) -> list[CleanedArticle]:
+def clean_articles(raw_articles: list[Any]) -> list[CleanedArticle]:
     """Clean raw articles: title, summary, and text."""
     if not raw_articles:
         logger.warning("No articles to clean")
