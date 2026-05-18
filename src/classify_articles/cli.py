@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from context_db.connection import get_session
 
 from classify_articles.classify_articles import classify_articles
-from classify_articles.helpers import parse_classify_articles_args
+from classify_articles.helpers import parse_classify_articles_args, log_classification_results
 from common.db_io import load_articles_for_classification, upload_article_topics
 from common.object_storage import upload_jsonl_records_to_object_store
 from common.cli_helpers import setup_logging
@@ -21,13 +21,16 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    args = parse_classify_articles_args()
 
+    # Parse CLI arguments
+    args = parse_classify_articles_args()
     articles = load_articles_for_classification(args.published_date, args.overwrite)
+
     if not articles:
-        logger.warning("No articles to classify")
+        logger.warning("No articles to classify. Exiting.")
         return
 
+    # Classify articles
     results = classify_articles(
         articles=articles,
         model=args.model,
@@ -40,14 +43,7 @@ def main() -> None:
         logger.warning("No articles classified")
         return
 
-    titles_by_id = {a["id"]: a.get("title", "untitled") for a in articles}
-    for result in results:
-        logger.info(
-            "  %s | %s | topics=%s",
-            result.article_id,
-            titles_by_id.get(result.article_id, "untitled"),
-            result.topics,
-        )
+    log_classification_results(results, articles, logger)
 
     if args.load_object_store:
         upload_jsonl_records_to_object_store(results, "classified_articles")

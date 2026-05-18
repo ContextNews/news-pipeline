@@ -10,6 +10,17 @@ from common.cli_helpers import parse_date
 DEFAULT_MODEL = "ContextNews/news-classifier"
 
 
+def log_classification_results(results: list, articles: list[dict], logger) -> None:  # type: ignore[type-arg]
+    titles_by_id = {a["id"]: a.get("title", "untitled") for a in articles}
+    for result in results:
+        logger.info(
+            "  %s | %s | topics=%s",
+            result.article_id,
+            titles_by_id.get(result.article_id, "untitled"),
+            result.topics,
+        )
+
+
 def parse_classify_articles_args() -> argparse.Namespace:
     """Parse CLI arguments for classify_articles."""
 

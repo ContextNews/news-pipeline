@@ -21,11 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+
+    # Parse CLI arguments
     args = parse_compute_embeddings_args()
     articles = load_ingested_articles(args.published_date, args.model, args.overwrite)
 
     if not articles:
-        logger.warning("No articles to process")
+        logger.warning("No articles to process. Exiting.")
         return
 
     # Compute embeddings
@@ -40,7 +42,7 @@ def main() -> None:
     )
 
     if not embedded_articles:
-        logger.warning("No articles embedded")
+        logger.warning("No articles embedded. Exiting.")
         return
 
     if args.load_object_store:

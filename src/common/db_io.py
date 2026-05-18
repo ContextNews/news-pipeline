@@ -1736,3 +1736,74 @@ def upload_clusters(
 
     session.commit()
     logger.info("Saved %d clusters to DB", len(clusters))
+
+
+def load_resolution_inputs(
+    published_date: date,
+    overwrite: bool,
+) -> tuple[
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list],
+    dict[str, list],
+    dict[str, list],
+    dict[str, list],
+]:
+    """Load all data needed for entity resolution in one call.
+
+    Returns:
+        (gpe_entities, person_entities, org_entities,
+         alias_to_states, alias_to_locations, alias_to_persons, alias_to_organizations)
+    """
+    gpe_entities, person_entities, org_entities = load_entities_for_resolution(
+        published_date, overwrite
+    )
+    gpe_names = {name for names in gpe_entities.values() for name in names}
+    person_names = {name for names in person_entities.values() for name in names}
+    org_names = {name for names in org_entities.values() for name in names}
+
+    alias_to_states = load_state_aliases(gpe_names)
+    alias_to_locations = load_location_aliases(gpe_names)
+    alias_to_persons = load_person_aliases(person_names)
+    alias_to_organizations = load_organization_aliases(org_names)
+
+    return (
+        gpe_entities,
+        person_entities,
+        org_entities,
+        alias_to_states,
+        alias_to_locations,
+        alias_to_persons,
+        alias_to_organizations,
+    )
+
+
+def load_story_inputs(clusters: list[dict[str, Any]]) -> dict[str, Any]:
+    """Load all article-level context needed by process_clusters in one call."""
+    all_article_ids = [
+        article["id"]
+        for cluster in clusters
+        for article in cluster["articles"]
+    ]
+
+    article_locations = load_article_locations(all_article_ids)
+    article_persons = load_article_persons(all_article_ids)
+    article_organizations = load_article_organizations(all_article_ids)
+    article_states = load_article_states(all_article_ids)
+    article_topics = load_article_topics(all_article_ids)
+
+    all_location_qids = sorted({qid for qids in article_locations.values() for qid in qids})
+    location_types, location_country_codes = load_location_metadata(all_location_qids)
+    country_to_state = load_country_to_state_map()
+
+    return {
+        "article_locations": article_locations,
+        "article_persons": article_persons,
+        "article_organizations": article_organizations,
+        "article_states": article_states,
+        "article_topics": article_topics,
+        "location_types": location_types,
+        "location_country_codes": location_country_codes,
+        "country_to_state": country_to_state,
+    }

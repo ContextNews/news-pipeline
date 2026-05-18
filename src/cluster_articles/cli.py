@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+
+    # Parse CLI arguments
     args = parse_cluster_articles_args()
     articles = load_articles_with_embeddings(args.ingested_date, args.embedding_model)
 
@@ -28,6 +30,7 @@ def main() -> None:
         logger.warning("No articles to cluster")
         return
 
+    # Cluster articles
     clustered = cluster_articles(
         articles,
         min_cluster_size=args.min_cluster_size,

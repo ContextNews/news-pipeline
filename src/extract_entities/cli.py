@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+
+    # Parse CLI arguments
     args = parse_extract_entities_args()
     articles = load_articles_for_entities(args.published_date, args.overwrite)
 
@@ -28,6 +30,7 @@ def main() -> None:
         logger.warning("No articles to process")
         return
 
+    # Extract entities
     entities = extract_entities(
         articles=articles,
         model=args.model,

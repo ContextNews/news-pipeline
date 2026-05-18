@@ -6,7 +6,7 @@ from ingest_articles.models import CleanedArticle, ResolvedArticle
 
 
 class TestIngestArticles:
-    @patch("ingest_articles.ingest_articles.clean")
+    @patch("ingest_articles.ingest_articles.clean_articles")
     @patch("ingest_articles.ingest_articles.fetch_articles")
     def test_happy_path_returns_cleaned_articles(self, mock_fetch, mock_clean) -> None:
         raw = [ResolvedArticle(
@@ -27,7 +27,7 @@ class TestIngestArticles:
         mock_fetch.assert_called_once_with(["bbc"], 12)
         mock_clean.assert_called_once_with(raw)
 
-    @patch("ingest_articles.ingest_articles.clean")
+    @patch("ingest_articles.ingest_articles.clean_articles")
     @patch("ingest_articles.ingest_articles.fetch_articles")
     def test_empty_fetch_returns_empty(self, mock_fetch, mock_clean) -> None:
         mock_fetch.return_value = []
@@ -38,7 +38,7 @@ class TestIngestArticles:
         assert result == []
         mock_clean.assert_not_called()
 
-    @patch("ingest_articles.ingest_articles.clean")
+    @patch("ingest_articles.ingest_articles.clean_articles")
     @patch("ingest_articles.ingest_articles.fetch_articles")
     def test_empty_clean_returns_empty(self, mock_fetch, mock_clean) -> None:
         mock_fetch.return_value = [ResolvedArticle(

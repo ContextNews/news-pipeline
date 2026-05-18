@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import datetime, timezone
+from typing import Any
 
 from common.cli_helpers import parse_date
+
+
+def upload_stories_to_object_store(stories: list[dict[str, Any]], now: datetime) -> None:
+    """Upload generated stories to the object store."""
+    from common.object_storage import build_object_key, upload_jsonl_to_object_store
+    key = build_object_key(
+        "generated_stories",
+        now,
+        f"generated_stories_{now.strftime('%Y_%m_%d_%H_%M')}.jsonl",
+    )
+    upload_jsonl_to_object_store(stories, os.environ["S3_BUCKET_NAME"], key)
 
 DEFAULT_MODEL = "gpt-4o-mini"
 

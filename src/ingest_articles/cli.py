@@ -36,6 +36,10 @@ def main() -> None:
     args = parse_ingest_articles_args()
     sources = parse_sources(args.sources)
 
+    if not sources:
+        logger.warning("No sources provided. Exiting.")
+        return
+
     # Ingest and clean articles
     ingested_articles = ingest_articles(
         sources=sources,
