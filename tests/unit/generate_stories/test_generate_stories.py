@@ -9,6 +9,7 @@ import pytest
 from generate_stories import generate_stories as stories_module
 from generate_stories.generate_stories import (
     _normalize_articles_for_cronkite,
+    _normalize_key_points,
     GeneratedStoryOverview,
 )
 
@@ -26,6 +27,26 @@ class FakeCronkite:
             "article_ids": [a.get("id") for a in articles],
             "noise_article_ids": ["noise-1"],
         }
+
+
+class TestNormalizeKeyPoints:
+    def test_list_of_strings_passthrough(self) -> None:
+        assert _normalize_key_points(["point one", "point two"]) == ["point one", "point two"]
+
+    def test_bare_string_wrapped_in_list(self) -> None:
+        assert _normalize_key_points("only one point") == ["only one point"]
+
+    def test_none_returns_empty_list(self) -> None:
+        assert _normalize_key_points(None) == []
+
+    def test_empty_list_returns_empty_list(self) -> None:
+        assert _normalize_key_points([]) == []
+
+    def test_empty_string_returns_empty_list(self) -> None:
+        assert _normalize_key_points("") == []
+
+    def test_list_items_coerced_to_str(self) -> None:
+        assert _normalize_key_points([1, 2, 3]) == ["1", "2", "3"]
 
 
 class TestNormalizeArticlesForCronkite:
@@ -76,6 +97,42 @@ class TestGenerateStoryOverview:
         assert story.noise_article_ids == ["noise-1"]
         assert fake.seen_articles is not None
         assert fake.seen_articles[0]["published_at"].startswith("2024-03-15")
+
+    def test_key_points_as_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class FakeWithKeyPoints(FakeCronkite):
+            def generate_story(self, articles):
+                return {**super().generate_story(articles), "key_points": ["point A", "point B"]}
+
+        monkeypatch.setattr(stories_module, "Cronkite", lambda model, config: FakeWithKeyPoints("gpt-4o-mini"))
+        cluster = [{"id": "a1", "published_at": None}]
+        story = stories_module.generate_story_overview(cluster)
+        assert story.key_points == ["point A", "point B"]
+
+    def test_key_points_as_bare_string_wrapped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class FakeBareString(FakeCronkite):
+            def generate_story(self, articles):
+                return {**super().generate_story(articles), "key_points": "single point text"}
+
+        monkeypatch.setattr(stories_module, "Cronkite", lambda model, config: FakeBareString("gpt-4o-mini"))
+        cluster = [{"id": "a1", "published_at": None}]
+        story = stories_module.generate_story_overview(cluster)
+        assert story.key_points == ["single point text"]
+
+    def test_key_points_none_returns_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class FakeNone(FakeCronkite):
+            def generate_story(self, articles):
+                return {**super().generate_story(articles), "key_points": None}
+
+        monkeypatch.setattr(stories_module, "Cronkite", lambda model, config: FakeNone("gpt-4o-mini"))
+        cluster = [{"id": "a1", "published_at": None}]
+        story = stories_module.generate_story_overview(cluster)
+        assert story.key_points == []
+
+    def test_key_points_missing_returns_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(stories_module, "Cronkite", lambda model, config: FakeCronkite("gpt-4o-mini"))
+        cluster = [{"id": "a1", "published_at": None}]
+        story = stories_module.generate_story_overview(cluster)
+        assert story.key_points == []
 
 
 class TestGenerateStory:
