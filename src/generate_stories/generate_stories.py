@@ -41,6 +41,19 @@ class GeneratedStoryOverview:
     auto_attached_state_qids: list[str] | None = None
 
 
+def _normalise_key_points(value: Any) -> list[str]:
+    """Ensure key_points is always list[str].
+
+    Handles cases where the LLM response parser returns a bare string,
+    None, or an empty value instead of a list.
+    """
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value]
+
+
 def _normalize_articles_for_cronkite(
     cluster: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -75,7 +88,7 @@ def generate_story_overview(
     return GeneratedStoryOverview(
         title=data.get("title", ""),
         summary=summary,
-        key_points=list(data.get("key_points") or []),
+        key_points=_normalise_key_points(data.get("key_points")),
         article_ids=list(data.get("article_ids") or []),
         noise_article_ids=list(data.get("noise_article_ids") or []),
         quotes=list(data.get("quotes") or []),

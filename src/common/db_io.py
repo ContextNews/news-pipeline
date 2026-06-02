@@ -706,7 +706,7 @@ def upload_stories(
                 "id": story["story_id"],
                 "title": story["title"],
                 "summary": story["summary"],
-                "key_points": story["key_points"],
+                "key_points": kp if isinstance(kp := story["key_points"], list) else ([kp] if kp else []),
                 "story_period": story["story_period"],
                 "created_at": now,
                 "updated_at": now,
