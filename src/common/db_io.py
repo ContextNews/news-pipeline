@@ -603,6 +603,19 @@ def load_article_topics(article_ids: list[str]) -> dict[str, list[str]]:
     return article_topics
 
 
+def _coerce_key_points(value: Any) -> list[str]:
+    """Return *value* as list[str], wrapping a bare str and coercing None/empty to [].
+
+    Guards upload_stories against a plain string reaching CAST(:key_points AS text[]),
+    which would raise psycopg2.errors.InvalidTextRepresentation.
+    """
+    if not value:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
 def upload_stories(
     stories: list[dict[str, Any]],
     session: Any,
@@ -706,7 +719,7 @@ def upload_stories(
                 "id": story["story_id"],
                 "title": story["title"],
                 "summary": story["summary"],
-                "key_points": kp if isinstance(kp := story["key_points"], list) else ([kp] if kp else []),
+                "key_points": _coerce_key_points(story["key_points"]),
                 "story_period": story["story_period"],
                 "created_at": now,
                 "updated_at": now,

@@ -9,7 +9,7 @@ import pytest
 from generate_stories import generate_stories as stories_module
 from generate_stories.generate_stories import (
     _normalize_articles_for_cronkite,
-    _normalise_key_points,
+    _normalize_key_points,
     GeneratedStoryOverview,
 )
 
@@ -29,24 +29,24 @@ class FakeCronkite:
         }
 
 
-class TestNormaliseKeyPoints:
+class TestNormalizeKeyPoints:
     def test_list_of_strings_passthrough(self) -> None:
-        assert _normalise_key_points(["point one", "point two"]) == ["point one", "point two"]
+        assert _normalize_key_points(["point one", "point two"]) == ["point one", "point two"]
 
     def test_bare_string_wrapped_in_list(self) -> None:
-        assert _normalise_key_points("only one point") == ["only one point"]
+        assert _normalize_key_points("only one point") == ["only one point"]
 
     def test_none_returns_empty_list(self) -> None:
-        assert _normalise_key_points(None) == []
+        assert _normalize_key_points(None) == []
 
     def test_empty_list_returns_empty_list(self) -> None:
-        assert _normalise_key_points([]) == []
+        assert _normalize_key_points([]) == []
 
     def test_empty_string_returns_empty_list(self) -> None:
-        assert _normalise_key_points("") == []
+        assert _normalize_key_points("") == []
 
     def test_list_items_coerced_to_str(self) -> None:
-        assert _normalise_key_points([1, 2, 3]) == ["1", "2", "3"]
+        assert _normalize_key_points([1, 2, 3]) == ["1", "2", "3"]
 
 
 class TestNormalizeArticlesForCronkite:
