@@ -1,14 +1,20 @@
 # Backfill config — re-process a specific date, write to DB only.
 # Adjust the date fields below before triggering.
+#
+# The dates are NOT all the same. embed/entities/resolve/classify select by
+# articles.published_at, while cluster selects by articles.ingested_at and
+# stories follows cluster_period. So when backfilling articles published
+# earlier than the run, the first four take the publication date and the last
+# two take the date of the run that ingests them.
 
 ingest:
-  lookback_hours: 24
+  lookback_hours: 48
   sources: all
   load_object_store: false
   load_db: true
 
 embed:
-  date: "2026-02-01"
+  date: "2026-09-19"
   model: all-MiniLM-L6-v2
   batch_size: 64
   word_limit: 300
@@ -20,7 +26,7 @@ embed:
   load_db: true
 
 entities:
-  date: "2026-02-01"
+  date: "2026-09-19"
   model: en_core_web_trf
   batch_size: 64
   word_limit: 300
@@ -29,13 +35,13 @@ entities:
   load_db: true
 
 resolve:
-  date: "2026-02-01"
+  date: "2026-09-19"
   overwrite: true
   load_object_store: false
   load_db: true
 
 cluster:
-  date: "2026-02-01"
+  date: "2026-09-20"
   embedding_model: all-MiniLM-L6-v2
   min_cluster_size: 2
   min_samples: 0
@@ -44,7 +50,7 @@ cluster:
   load_db: true
 
 classify:
-  date: "2026-02-01"
+  date: "2026-09-19"
   model: ContextNews/news-classifier
   batch_size: 64
   threshold: "0.5"
@@ -54,7 +60,7 @@ classify:
   load_db: true
 
 stories:
-  date: "2026-02-01"
+  date: "2026-09-20"
   model: gpt-4o-mini
   overwrite: true
   load_object_store: false
