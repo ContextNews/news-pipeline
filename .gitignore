@@ -16,9 +16,6 @@ dist/
 *.egg
 .eggs/
 
-# Claude
-CLAUDE.md
-
 # Project-specific
 **/plans/
 .ignore/
