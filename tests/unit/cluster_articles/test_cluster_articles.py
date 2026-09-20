@@ -86,3 +86,20 @@ class TestClusterArticles:
     def test_no_valid_embeddings_returns_empty(self) -> None:
         articles = [{"id": "a1", "embedding": None}]
         assert cluster_articles(articles) == []
+
+    @patch("cluster_articles.cluster_articles.hdbscan")
+    def test_fewer_articles_than_min_cluster_size_returns_empty(self, mock_hdbscan) -> None:
+        articles = [{"id": "a1", "embedding": [0.1, 0.2]}]
+
+        assert cluster_articles(articles, min_cluster_size=2) == []
+        mock_hdbscan.HDBSCAN.assert_not_called()
+
+    @patch("cluster_articles.cluster_articles.hdbscan")
+    def test_min_samples_takes_precedence_over_min_cluster_size(self, mock_hdbscan) -> None:
+        articles = [
+            {"id": "a1", "embedding": [0.1, 0.2]},
+            {"id": "a2", "embedding": [0.3, 0.4]},
+        ]
+
+        assert cluster_articles(articles, min_cluster_size=2, min_samples=3) == []
+        mock_hdbscan.HDBSCAN.assert_not_called()

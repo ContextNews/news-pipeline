@@ -72,6 +72,17 @@ def cluster_articles(
         logger.warning("No embeddings available for clustering")
         return []
 
+    # HDBSCAN queries min_samples (defaulting to min_cluster_size) neighbours per
+    # point, and the underlying KD-tree raises if that exceeds the point count.
+    required_points = min_samples or min_cluster_size
+    if len(kept_articles) < required_points:
+        logger.warning(
+            "Too few articles to cluster: %d available, %d required",
+            len(kept_articles),
+            required_points,
+        )
+        return []
+
     logger.info(
         "Clustering %d articles (min_cluster_size=%d, min_samples=%s)",
         len(kept_articles),
